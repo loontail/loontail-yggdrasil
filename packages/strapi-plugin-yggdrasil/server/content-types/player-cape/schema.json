@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "yggdrasil_player_capes",
+  "info": {
+    "singularName": "player-cape",
+    "pluralName": "player-capes",
+    "displayName": "Player Cape",
+    "description": "Minecraft player cape owned by the Yggdrasil plugin"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": { "visible": false },
+    "content-type-builder": { "visible": false }
+  },
+  "attributes": {
+    "userId": {
+      "type": "integer",
+      "required": true,
+      "unique": true
+    },
+    "username": {
+      "type": "string"
+    },
+    "filePath": {
+      "type": "string",
+      "required": true
+    },
+    "fileUrl": {
+      "type": "string",
+      "required": true
+    },
+    "fileSize": {
+      "type": "integer"
+    }
+  }
+}

@@ -5,19 +5,23 @@ import type { StrapiInstance } from '../types';
  * Domain shape for an `up_users` row as the Yggdrasil plugin sees it.
  * Strapi's content-manager isn't aware of the `uuid` column (we add it
  * at bootstrap via raw Knex), so we read it via the same low-level API.
+ *
+ * Skin/cape URLs used to live on this row as denormalised strings
+ * (`up_users.skin`, `up_users.cape`). They have moved into the plugin's
+ * own `yggdrasil_player_skins` / `_capes` tables — owned by the
+ * `textures-store` service — and the legacy columns are dropped during
+ * bootstrap. Don't add them back.
  */
 export type YggdrasilUserRow = {
   readonly id: number;
   readonly username: string;
   readonly uuid: string | null;
-  readonly skin: string | null;
-  readonly cape: string | null;
   readonly blocked: boolean | null;
   readonly confirmed: boolean | null;
 };
 
 const TABLE = 'up_users';
-const COLUMNS = ['id', 'username', 'uuid', 'skin', 'cape', 'blocked', 'confirmed'] as const;
+const COLUMNS = ['id', 'username', 'uuid', 'blocked', 'confirmed'] as const;
 
 type Strapi = StrapiInstance;
 
@@ -29,8 +33,6 @@ const toRow = (raw: Record<string, unknown> | undefined | null): YggdrasilUserRo
     id: Number(raw.id),
     username: String(raw.username ?? ''),
     uuid: raw.uuid == null ? null : String(raw.uuid),
-    skin: raw.skin == null ? null : String(raw.skin),
-    cape: raw.cape == null ? null : String(raw.cape),
     blocked: raw.blocked == null ? null : Boolean(raw.blocked),
     confirmed: raw.confirmed == null ? null : Boolean(raw.confirmed),
   };

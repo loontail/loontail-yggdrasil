@@ -51,14 +51,19 @@ export type StrapiInstance = {
  */
 export type KnexLike = {
   schema: {
+    hasTable(table: string): Promise<boolean>;
     hasColumn(table: string, column: string): Promise<boolean>;
+    createTable(table: string, callback: (t: KnexTableBuilder) => void): Promise<unknown>;
     alterTable(table: string, callback: (t: KnexTableBuilder) => void): Promise<unknown>;
+    dropTable(table: string): Promise<unknown>;
+    dropTableIfExists(table: string): Promise<unknown>;
   };
   /** Dialect-agnostic SQL function builders (e.g. `knex.fn.now()`). */
   readonly fn: {
     now(): unknown;
   };
   raw(sql: string, bindings?: unknown[]): Promise<unknown>;
+  transaction<T>(work: (trx: KnexLike) => Promise<T>): Promise<T>;
   (tableName: string): KnexQueryBuilder;
 };
 
@@ -66,6 +71,8 @@ export type KnexTableBuilder = {
   string(column: string, length?: number): KnexColumnBuilder;
   integer(column: string): KnexColumnBuilder;
   timestamp(column: string, options?: { useTz?: boolean }): KnexColumnBuilder;
+  dropColumn(column: string): void;
+  primary(columns: string | string[]): KnexColumnBuilder;
 };
 
 export type KnexColumnBuilder = {
@@ -74,6 +81,7 @@ export type KnexColumnBuilder = {
   unique(): KnexColumnBuilder;
   defaultTo(value: unknown): KnexColumnBuilder;
   index(): KnexColumnBuilder;
+  primary(): KnexColumnBuilder;
 };
 
 /**
