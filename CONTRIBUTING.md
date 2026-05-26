@@ -11,6 +11,8 @@ cd loontail-yggdrasil
 npm install
 ```
 
+`npm install` installs the git hooks via husky's `prepare` script.
+
 The repo is a Turborepo with three workspaces under `packages/`:
 
 | Workspace | npm name |
@@ -41,6 +43,20 @@ npm run lint && npm run typecheck && npm test && npm run build
 ```
 
 CI runs exactly the same chain — see `.github/workflows/ci.yml`.
+
+## Git hooks
+
+`npm install` wires up husky. Three hooks are active:
+
+| Hook | Runs |
+|---|---|
+| `commit-msg` | `commitlint` (Conventional Commits, 100-char header cap) |
+| `pre-commit` | `lint-staged` (Biome on staged `.ts/.tsx/.js/.jsx/.json`) + `npm run typecheck` |
+| `pre-push` | `npm test` + `npm run build` |
+
+Don't bypass with `--no-verify` — CI runs the same checks and the hook
+output is what the reviewer will see anyway. The Turbo cache makes
+typecheck/test/build cheap on subsequent commits.
 
 ## Per-package work
 
