@@ -1,0 +1,245 @@
+name: Release
+
+# Runs on every push to `main`. For each package under `packages/` whose
+# files changed since its last release tag, the workflow auto-bumps the
+# patch version, commits the bumps as a single
+# `chore(release): <tag>[, <tag>...]` commit, tags each bumped package
+# with `<short-name>-vX.Y.Z`, publishes the new versions to npm with
+# provenance, and creates a GitHub Release per package.
+#
+# Unchanged packages are left alone — `npm publish` is not invoked for
+# them, so we don't bump versions for noise.
+#
+# Required secrets:
+#   NPM_TOKEN      — npm automation token with publish scope on the
+#                    `@loontail/*` packages.
+#   RELEASE_TOKEN  — fine-grained PAT (Contents: read/write) owned by a
+#                    user in the repo's branch ruleset bypass list. The
+#                    default GITHUB_TOKEN cannot push directly to a
+#                    protected `main`; RELEASE_TOKEN can.
+#
+# Loop guard: the bump commit (`chore(release): …`) triggers this
+# workflow again; the guard job short-circuits when the commit message
+# begins with `chore(release):` so the release does not chain into
+# itself.
+#
+# To ship something other than a patch (minor / major), bump the
+# package locally:
+#   npm --workspace=packages/<pkg> version minor --no-git-tag-version
+# commit as `chore(release): <pkg>-vX.Y.Z`, push — the guard treats it
+# as a release commit (skips), and the next regular commit on `main`
+# triggers the auto-bump from that baseline.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Guard
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - id: check
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if echo "$MESSAGE" | grep -qE '^chore\(release\):'; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "Release commit detected — skipping."
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure required secrets are configured
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          missing=()
+          [ -z "$NPM_TOKEN" ] && missing+=("NPM_TOKEN")
+          [ -z "$RELEASE_TOKEN" ] && missing+=("RELEASE_TOKEN")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required secret(s): ${missing[*]}. Set them under Settings → Secrets and variables → Actions before pushing to main."
+            exit 1
+          fi
+
+  release:
+    name: Bump + publish changed packages
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    # `contents: write` lets the job push the bump commit and create
+    # GitHub Releases. `id-token: write` enables npm provenance.
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the full history + tags so we can diff each package
+          # against its last release tag.
+          fetch-depth: 0
+          # PAT belongs to a repo admin (bypass list), so the push below
+          # bypasses the "Require pull request" ruleset on main.
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.11"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - run: npm ci
+
+      # Final gate — re-run every check before we publish. ci.yml
+      # already ran them on the merged PR, but this is the last point
+      # where we can stop a bad publish.
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+      - name: Detect changed packages, bump versions, tag, push
+        id: detect
+        run: |
+          set -euo pipefail
+
+          declare -a changed_dirs=()
+          declare -a tags_to_push=()
+          # Parallel arrays keep ordering deterministic; the JSON emitted
+          # at the end drives the publish + release steps.
+          declare -a pkg_dirs=()
+          declare -a pkg_names=()
+          declare -a pkg_versions=()
+          declare -a pkg_tags=()
+
+          for pkg_dir in packages/*; do
+            [ -d "$pkg_dir" ] || continue
+            pkg_name=$(basename "$pkg_dir")
+            last_tag=$(git tag --list "${pkg_name}-v*" --sort=-version:refname | head -1)
+            if [ -z "$last_tag" ]; then
+              echo "[$pkg_name] no prior release tag — treating as changed (first publish)"
+              changed=true
+            else
+              if git diff --quiet "${last_tag}..HEAD" -- "$pkg_dir/"; then
+                echo "[$pkg_name] no changes since ${last_tag} — skipping"
+                changed=false
+              else
+                echo "[$pkg_name] changes detected since ${last_tag}"
+                changed=true
+              fi
+            fi
+
+            if [ "$changed" = "true" ]; then
+              version_line=$(cd "$pkg_dir" && npm version patch --no-git-tag-version)
+              plain="${version_line#v}"
+              tag="${pkg_name}-v${plain}"
+              echo "[$pkg_name] bumped to ${plain}"
+              git add "$pkg_dir/package.json"
+              pkg_dirs+=("$pkg_dir")
+              pkg_names+=("$pkg_name")
+              pkg_versions+=("$plain")
+              pkg_tags+=("$tag")
+            fi
+          done
+
+          if [ ${#pkg_dirs[@]} -eq 0 ]; then
+            echo "::notice::No packages changed — nothing to release."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # `npm version` only touches the per-package package.json. The
+          # root lockfile has each workspace's version baked in, so
+          # re-resolve to keep it in sync.
+          npm install --package-lock-only --ignore-scripts
+          git add package-lock.json
+
+          # Single commit, multiple tags.
+          commit_subject="chore(release): "
+          first=true
+          for tag in "${pkg_tags[@]}"; do
+            if [ "$first" = "true" ]; then
+              commit_subject+="${tag}"
+              first=false
+            else
+              commit_subject+=", ${tag}"
+            fi
+          done
+          git commit -m "${commit_subject}"
+
+          for tag in "${pkg_tags[@]}"; do
+            git tag "${tag}"
+          done
+
+          git push origin HEAD:main
+          for tag in "${pkg_tags[@]}"; do
+            git push origin "${tag}"
+          done
+
+          # Emit a compact JSON array consumed by the publish/release
+          # steps. jq is preinstalled on ubuntu-latest.
+          json="["
+          for ((i = 0; i < ${#pkg_dirs[@]}; i++)); do
+            [ $i -gt 0 ] && json+=","
+            json+=$(jq -nc \
+              --arg dir "${pkg_dirs[$i]}" \
+              --arg name "${pkg_names[$i]}" \
+              --arg version "${pkg_versions[$i]}" \
+              --arg tag "${pkg_tags[$i]}" \
+              '{dir: $dir, name: $name, version: $version, tag: $tag}')
+          done
+          json+="]"
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          echo "packages=${json}" >> "$GITHUB_OUTPUT"
+
+      # Re-build off the freshly bumped versions so the published
+      # tarballs carry the correct `version` field.
+      - name: Rebuild after bump
+        if: steps.detect.outputs.proceed == 'true'
+        run: npm run build
+
+      - name: Publish each changed package to npm
+        if: steps.detect.outputs.proceed == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGES_JSON: ${{ steps.detect.outputs.packages }}
+        run: |
+          set -euo pipefail
+          echo "$PACKAGES_JSON" | jq -c '.[]' | while read -r pkg; do
+            dir=$(echo "$pkg" | jq -r '.dir')
+            tag=$(echo "$pkg" | jq -r '.tag')
+            echo "::group::Publishing ${tag} (from ${dir})"
+            (cd "$dir" && npm publish --provenance --access public)
+            echo "::endgroup::"
+          done
+
+      - name: Create GitHub release per package
+        if: steps.detect.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGES_JSON: ${{ steps.detect.outputs.packages }}
+        run: |
+          set -euo pipefail
+          echo "$PACKAGES_JSON" | jq -c '.[]' | while read -r pkg; do
+            tag=$(echo "$pkg" | jq -r '.tag')
+            name=$(echo "$pkg" | jq -r '.name')
+            version=$(echo "$pkg" | jq -r '.version')
+            echo "::group::Creating GitHub Release ${tag}"
+            gh release create "$tag" \
+              --title "@loontail/${name}@${version}" \
+              --generate-notes
+            echo "::endgroup::"
+          done
