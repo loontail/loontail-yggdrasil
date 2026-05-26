@@ -28,10 +28,7 @@
       "default": "./loader.js"
     }
   },
-  "files": [
-    "dist",
-    "loader.cjs"
-  ],
+  "files": ["dist", "loader.cjs"],
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",

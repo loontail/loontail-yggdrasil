@@ -258,6 +258,16 @@ jobs:
             exit 0
           fi
 
+          # Normalise the rewritten package.json files. The node-based
+          # edit (bump + dep rewrites) uses JSON.stringify, which expands
+          # short arrays onto multiple lines — Biome wants them on one
+          # line, and the next ci.yml run (or the release's own re-lint
+          # below if reordered) would otherwise fail.
+          npx --no-install biome format --write packages/*/package.json
+          for pkg_dir in "${pkg_dirs[@]}"; do
+            git add "$pkg_dir/package.json"
+          done
+
           # All sibling deps now reference the just-bumped versions, so
           # this lockfile sync resolves entirely via workspace links —
           # no registry round-trip needed for @loontail/* names that

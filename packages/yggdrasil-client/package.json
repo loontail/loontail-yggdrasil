@@ -28,10 +28,7 @@
       }
     }
   },
-  "files": [
-    "dist",
-    "vendor"
-  ],
+  "files": ["dist", "vendor"],
   "sideEffects": false,
   "scripts": {
     "fetch-authlib-injector": "node scripts/fetch-authlib-injector.mjs",
