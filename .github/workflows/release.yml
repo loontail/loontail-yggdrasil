@@ -116,43 +116,140 @@ jobs:
         run: |
           set -euo pipefail
 
-          declare -a changed_dirs=()
-          declare -a tags_to_push=()
+          # Topological dependency order: depend-on-nothing first so that
+          # bumping a base package can cascade into its dependents' deps
+          # rewrites before they are bumped themselves. The ordering is
+          # static because the workspace graph is small; if a fourth
+          # package lands, add it here in the right slot.
+          ORDERED_PACKAGES=(yggdrasil-core yggdrasil-client strapi-plugin-yggdrasil)
+
           # Parallel arrays keep ordering deterministic; the JSON emitted
           # at the end drives the publish + release steps.
           declare -a pkg_dirs=()
           declare -a pkg_names=()
           declare -a pkg_versions=()
           declare -a pkg_tags=()
+          declare -A bumped_versions=()
 
-          for pkg_dir in packages/*; do
-            [ -d "$pkg_dir" ] || continue
-            pkg_name=$(basename "$pkg_dir")
-            last_tag=$(git tag --list "${pkg_name}-v*" --sort=-version:refname | head -1)
-            if [ -z "$last_tag" ]; then
-              echo "[$pkg_name] no prior release tag — treating as changed (first publish)"
-              changed=true
-            else
-              if git diff --quiet "${last_tag}..HEAD" -- "$pkg_dir/"; then
-                echo "[$pkg_name] no changes since ${last_tag} — skipping"
-                changed=false
+          # Bump a package's version in place by editing package.json with
+          # node — bypasses `npm version`, which in a workspace shells out
+          # to `npm i --package-lock-only` and 404s when a sibling still
+          # references the old, never-published version of the package we
+          # are about to bump.
+          bump_package() {
+            local dir="$1"
+            local current
+            local next
+            current=$(node -p "require('./${dir}/package.json').version")
+            next=$(node -e "
+              const [a,b,c] = '${current}'.split('.').map(Number);
+              console.log([a, b, c + 1].join('.'));
+            ")
+            node -e "
+              const fs = require('fs');
+              const path = './${dir}/package.json';
+              const p = JSON.parse(fs.readFileSync(path, 'utf8'));
+              p.version = '${next}';
+              fs.writeFileSync(path, JSON.stringify(p, null, 2) + '\n');
+            "
+            echo "$next"
+          }
+
+          # Rewrite every reference to bumped @loontail/* siblings inside
+          # `dependencies` / `peerDependencies` / `devDependencies` of the
+          # given package.json. Returns 0 if anything changed, 1 otherwise.
+          # The bumped-versions map is passed via env as JSON so we never
+          # have to thread shell-quoted bash arrays into a node -e literal.
+          update_internal_deps() {
+            local dir="$1"
+            local versions_json="$2"
+            VERSIONS_JSON="$versions_json" PKG_PATH="${dir}/package.json" node -e '
+              const fs = require("fs");
+              const versions = JSON.parse(process.env.VERSIONS_JSON);
+              const path = process.env.PKG_PATH;
+              const p = JSON.parse(fs.readFileSync(path, "utf8"));
+              let touched = false;
+              for (const slot of ["dependencies", "peerDependencies", "devDependencies"]) {
+                if (!p[slot]) continue;
+                for (const [short, next] of Object.entries(versions)) {
+                  const full = "@loontail/" + short;
+                  if (p[slot][full] != null) {
+                    p[slot][full] = "^" + next;
+                    touched = true;
+                  }
+                }
+              }
+              if (touched) fs.writeFileSync(path, JSON.stringify(p, null, 2) + "\n");
+              process.exit(touched ? 0 : 1);
+            '
+          }
+
+          # Serialize the bumped_versions associative array as a JSON
+          # object on demand. Used by update_internal_deps above.
+          serialize_bumped_versions() {
+            if [ ${#bumped_versions[@]} -eq 0 ]; then
+              echo "{}"
+              return
+            fi
+            local first=true
+            local out="{"
+            for k in "${!bumped_versions[@]}"; do
+              if [ "$first" = true ]; then
+                first=false
               else
-                echo "[$pkg_name] changes detected since ${last_tag}"
-                changed=true
+                out+=","
+              fi
+              out+="\"${k}\":\"${bumped_versions[$k]}\""
+            done
+            out+="}"
+            echo "$out"
+          }
+
+          for pkg_name in "${ORDERED_PACKAGES[@]}"; do
+            pkg_dir="packages/$pkg_name"
+            if [ ! -d "$pkg_dir" ]; then
+              echo "[$pkg_name] not found under packages/ — skipping"
+              continue
+            fi
+
+            # Step 1: cascade internal dep updates from earlier-bumped
+            # siblings, even if this package has no file changes of its
+            # own. If the dep ref was rewritten, treat the package as
+            # transitively changed and bump it.
+            transitive=false
+            if [ ${#bumped_versions[@]} -gt 0 ]; then
+              if update_internal_deps "$pkg_dir" "$(serialize_bumped_versions)"; then
+                transitive=true
+                echo "[$pkg_name] internal @loontail/* dep refs rewritten"
               fi
             fi
 
-            if [ "$changed" = "true" ]; then
-              version_line=$(cd "$pkg_dir" && npm version patch --no-git-tag-version)
-              plain="${version_line#v}"
-              tag="${pkg_name}-v${plain}"
-              echo "[$pkg_name] bumped to ${plain}"
-              git add "$pkg_dir/package.json"
-              pkg_dirs+=("$pkg_dir")
-              pkg_names+=("$pkg_name")
-              pkg_versions+=("$plain")
-              pkg_tags+=("$tag")
+            # Step 2: own-file changes since the package's last release tag.
+            last_tag=$(git tag --list "${pkg_name}-v*" --sort=-version:refname | head -1)
+            own=false
+            if [ -z "$last_tag" ]; then
+              echo "[$pkg_name] no prior release tag — treating as changed (first publish)"
+              own=true
+            elif ! git diff --quiet "${last_tag}..HEAD" -- "$pkg_dir/"; then
+              echo "[$pkg_name] changes detected since ${last_tag}"
+              own=true
+            else
+              echo "[$pkg_name] no own-file changes since ${last_tag}"
             fi
+
+            if [ "$own" = "false" ] && [ "$transitive" = "false" ]; then
+              continue
+            fi
+
+            plain=$(bump_package "$pkg_dir")
+            tag="${pkg_name}-v${plain}"
+            bumped_versions[$pkg_name]="$plain"
+            pkg_dirs+=("$pkg_dir")
+            pkg_names+=("$pkg_name")
+            pkg_versions+=("$plain")
+            pkg_tags+=("$tag")
+            git add "$pkg_dir/package.json"
+            echo "[$pkg_name] bumped to ${plain}"
           done
 
           if [ ${#pkg_dirs[@]} -eq 0 ]; then
@@ -161,9 +258,10 @@ jobs:
             exit 0
           fi
 
-          # `npm version` only touches the per-package package.json. The
-          # root lockfile has each workspace's version baked in, so
-          # re-resolve to keep it in sync.
+          # All sibling deps now reference the just-bumped versions, so
+          # this lockfile sync resolves entirely via workspace links —
+          # no registry round-trip needed for @loontail/* names that
+          # don't exist on npm yet (first-time releases).
           npm install --package-lock-only --ignore-scripts
           git add package-lock.json
 
