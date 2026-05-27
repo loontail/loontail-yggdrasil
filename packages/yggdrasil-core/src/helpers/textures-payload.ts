@@ -95,6 +95,17 @@ export const encodeTexturesPayloadBase64 = (payload: TexturesPayload): string =>
  * `properties[0].value` base64 string back into the JSON
  * {@link TexturesPayload}. Throws {@link YggdrasilCoreError} with
  * `invalid_textures_input` on a malformed input.
+ *
+ * @example
+ * ```ts
+ * const profile = await client.profile(uuid, { signed: true });
+ * const prop = profile.properties?.find((p) => p.name === 'textures');
+ * if (prop) {
+ *   const payload = decodeTexturesPayloadBase64(prop.value);
+ *   console.log(payload.textures.SKIN?.url);
+ *   console.log(payload.textures.SKIN?.metadata?.model); // 'slim' | undefined
+ * }
+ * ```
  */
 export const decodeTexturesPayloadBase64 = (encoded: string): TexturesPayload => {
   let json: string;

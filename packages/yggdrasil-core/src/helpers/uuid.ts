@@ -46,6 +46,12 @@ export const dashUuid = (value: string): string => {
 /**
  * Generate a fresh UUIDv4 and return it as a 32-character undashed
  * hex string. Uses `globalThis.crypto.randomUUID` (Node ≥ 19, browser).
+ *
+ * @example
+ * ```ts
+ * const uuid = randomUndashedUuid();
+ * // → '7f3c2d8a4b194d6c8a2f9e1b3d4c5f6a'
+ * ```
  */
 export const randomUndashedUuid = (): PlayerUuid => undashUuid(globalThis.crypto.randomUUID());
 

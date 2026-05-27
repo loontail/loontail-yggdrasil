@@ -60,6 +60,25 @@ export class YggdrasilClientError extends Error {
 export const isYggdrasilClientError = (value: unknown): value is YggdrasilClientError =>
   value instanceof YggdrasilClientError;
 
+/**
+ * Narrowing type guard combining {@link isYggdrasilClientError} with a
+ * code check. After this returns `true`, `value` is typed as a
+ * `YggdrasilClientError` and `value.context.<field>` can be accessed
+ * without a cast.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await client.authenticate({ username, password });
+ * } catch (err) {
+ *   if (isYggdrasilClientErrorCode(err, YggdrasilClientErrorCodes.HTTP_ERROR)) {
+ *     if (err.context?.status === 403) return promptForFreshCredentials();
+ *     if (err.context?.body?.error === 'IllegalArgumentException') return showBadInput();
+ *   }
+ *   throw err;
+ * }
+ * ```
+ */
 export const isYggdrasilClientErrorCode = (
   value: unknown,
   code: YggdrasilClientErrorCode,
