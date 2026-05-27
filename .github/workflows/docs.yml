@@ -1,0 +1,61 @@
+name: Deploy Docs
+
+# Builds the VitePress site and publishes it to GitHub Pages. Runs on every push to
+# `main` that touches docs content or its build inputs. Can also be triggered manually
+# from the Actions tab.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs-site/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# `pages: write` and `id-token: write` are required by actions/deploy-pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time. `cancel-in-progress: false` means a new deploy waits
+# for the current one to finish rather than cancelling it — preserves history of every
+# published change.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.11"
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/configure-pages@v5
+
+      # Output lands in docs-site/.vitepress/dist.
+      - run: npm run docs:build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/.vitepress/dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
