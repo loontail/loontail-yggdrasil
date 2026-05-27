@@ -35,7 +35,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.11"
+          # Match ci.yml — Node 22 for the dev toolchain (lint-staged,
+          # commitlint, listr2 all require >=22).
+          node-version: "22"
           cache: npm
 
       - run: npm ci

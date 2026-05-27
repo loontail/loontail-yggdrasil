@@ -2,8 +2,10 @@
 
 ## Setup
 
-- Node ≥ 20.11
-- npm 10+ (ships with Node 20)
+- Node ≥ 22.13 (the dev toolchain — lint-staged 17, listr2 10, commitlint
+  21 — requires Node ≥ 22; published packages still target Node 20 at
+  runtime, see each package's `engines.node`)
+- npm 10+ (ships with Node 22)
 
 ```bash
 git clone <your-fork>

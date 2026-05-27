@@ -20,7 +20,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.11"
+          # Node 22 — lint-staged@17.0.5 and listr2@10.2.1 require >=22.13
+          # (listr2 imports `styleText` from `node:util`, stable in Node 22).
+          node-version: "22"
           cache: npm
 
       - run: npm ci
