@@ -32,6 +32,12 @@ const HTTP_FORBIDDEN = 403;
 
 const GameProfileArraySchema = z.array(GameProfileSchema);
 
+const signedQuery = (signed?: boolean): string => {
+  if (signed === true) return '?unsigned=false';
+  if (signed === false) return '?unsigned=true';
+  return '';
+};
+
 export class YggdrasilClient {
   private readonly apiRoot: string;
   private readonly fetcher: Fetcher;
@@ -115,7 +121,7 @@ export class YggdrasilClient {
 
   async profile(uuid: string, opts?: { signed?: boolean }): Promise<GameProfile> {
     const undashed = undashUuid(uuid);
-    const query = opts?.signed ? '?unsigned=false' : '';
+    const query = signedQuery(opts?.signed);
     return getJson({
       fetcher: this.fetcher,
       url: `${this.url(YggdrasilEndpoints.sessionProfile)}/${undashed}${query}`,
@@ -128,7 +134,7 @@ export class YggdrasilClient {
       throw new YggdrasilClientError(
         YggdrasilClientErrorCodes.INVALID_REQUEST,
         `bulkProfiles accepts at most ${BULK_PROFILES_MAX} names per request (got ${names.length})`,
-        { context: { url: this.url(YggdrasilEndpoints.bulkProfiles) } },
+        { context: { count: names.length, url: this.url(YggdrasilEndpoints.bulkProfiles) } },
       );
     }
     return postJson({

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { StrapiInstance } from '../types';
 
@@ -41,7 +41,15 @@ export const createStorageService = ({ strapi }: { strapi: StrapiInstance }) => 
     },
 
     write(kind: StorageKind, filename: string, buffer: Buffer): void {
-      writeFileSync(this.diskPath(kind, filename), buffer);
+      const target = this.diskPath(kind, filename);
+      const temp = `${target}.${newRevision()}.tmp`;
+      try {
+        writeFileSync(temp, buffer);
+        renameSync(temp, target);
+      } catch (err) {
+        if (existsSync(temp)) rmSync(temp, { force: true });
+        throw err;
+      }
     },
 
     deleteIfExists(filePath: string): void {

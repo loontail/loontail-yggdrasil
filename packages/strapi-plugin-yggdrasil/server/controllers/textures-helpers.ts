@@ -1,6 +1,7 @@
 import {
   type SkinVariant,
   SkinVariants,
+  YggdrasilErrorKinds,
   assertPngBuffer,
   isYggdrasilCoreError,
 } from '@loontail/yggdrasil-core';
@@ -26,7 +27,11 @@ export const validatePngOrThrow = (buffer: Buffer, kind: AssetKind): void => {
     assertPngBuffer(buffer, kind);
   } catch (err) {
     if (isYggdrasilCoreError(err)) {
-      throw new YggdrasilHttpError(HTTP_BAD_REQUEST, 'IllegalArgumentException', err.message);
+      throw new YggdrasilHttpError(
+        HTTP_BAD_REQUEST,
+        YggdrasilErrorKinds.IllegalArgument,
+        err.message,
+      );
     }
     throw err;
   }
@@ -49,24 +54,40 @@ export const persistAsset = async (
   const filePath = storage.diskPath(kind, filename);
   const fileUrl = storage.publicUrl(kind, filename);
 
-  const row =
-    kind === 'skin'
-      ? await store.upsert('skin', owner.id, {
-          username: owner.username,
-          filePath,
-          fileUrl,
-          fileSize: buffer.length,
-          variant: variant ?? SkinVariants.CLASSIC,
-        })
-      : await store.upsert('cape', owner.id, {
-          username: owner.username,
-          filePath,
-          fileUrl,
-          fileSize: buffer.length,
-        });
+  let row: SkinRow | CapeRow;
+  try {
+    row =
+      kind === 'skin'
+        ? await store.upsert('skin', owner.id, {
+            username: owner.username,
+            filePath,
+            fileUrl,
+            fileSize: buffer.length,
+            variant: variant ?? SkinVariants.CLASSIC,
+          })
+        : await store.upsert('cape', owner.id, {
+            username: owner.username,
+            filePath,
+            fileUrl,
+            fileSize: buffer.length,
+          });
+  } catch (err) {
+    try {
+      storage.deleteIfExists(filePath);
+    } catch (cleanupErr) {
+      const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+      strapi.log.warn(`[yggdrasil] could not clean up failed ${kind} upload: ${message}`);
+    }
+    throw err;
+  }
 
   if (previous?.filePath && previous.filePath !== filePath) {
-    storage.deleteIfExists(previous.filePath);
+    try {
+      storage.deleteIfExists(previous.filePath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      strapi.log.warn(`[yggdrasil] could not delete previous ${kind} file: ${message}`);
+    }
   }
 
   return row;

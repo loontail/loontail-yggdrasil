@@ -73,5 +73,5 @@ This keeps your host Strapi project unchanged except for the
 | `POST`   | `/authserver/invalidate`                         | 204; deletes the token |
 | `POST`   | `/sessionserver/session/minecraft/join`          | server-join cache push |
 | `GET`    | `/sessionserver/session/minecraft/hasJoined`     | signed profile |
-| `GET`    | `/sessionserver/session/minecraft/profile/:uuid` | profile (`?unsigned=false` to sign) |
+| `GET`    | `/sessionserver/session/minecraft/profile/:uuid` | profile (signed by default; `?unsigned=true` strips the signature) |
 | `POST`   | `/api/profiles/minecraft`                        | bulk name → profile lookup |

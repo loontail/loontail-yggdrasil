@@ -127,17 +127,15 @@ console.log(payload.textures.SKIN?.metadata?.model);
 console.log(payload.textures.CAPE?.url);
 ```
 
-Reverse of the encoder. Returns a fully-typed `TexturesPayload`.
+Reverse of the encoder. Returns a fully-typed `TexturesPayload` after checking
+the decoded JSON against `TexturesPayloadSchema`.
 
-Throws `YggdrasilCoreError(invalid_textures_input)` with `cause` set to the
-underlying exception if:
+Throws `YggdrasilCoreError(invalid_textures_input)` with `context.stage`
+set to the failing decoder stage:
 
-- The base64 doesn't decode (`textures payload is not valid base64`).
-- The decoded text doesn't parse as JSON (`textures payload is not valid JSON`).
-
-Note: the decoder does not run a Zod schema check. If you're consuming this
-from untrusted sources, run `YggdrasilSessionSchema.parse(...)` or a hand-built
-guard afterwards.
+- `base64` when the base64 doesn't decode.
+- `json` when the decoded text doesn't parse as JSON.
+- `shape` when the decoded JSON doesn't match the expected payload shape.
 
 ## End-to-end (server side)
 

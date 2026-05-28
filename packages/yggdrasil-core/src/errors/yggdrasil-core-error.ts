@@ -26,7 +26,9 @@ export class YggdrasilCoreError extends Error {
     if (options?.cause !== undefined) {
       (this as unknown as { cause: unknown }).cause = options.cause;
     }
-    Error.captureStackTrace(this, YggdrasilCoreError);
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, YggdrasilCoreError);
+    }
   }
 }
 

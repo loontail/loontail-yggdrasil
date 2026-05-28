@@ -46,7 +46,7 @@ Grouped by what they do, not by where on the wire they hit.
 
 | Method | HTTP | Returns |
 |---|---|---|
-| `client.profile(uuid, { signed?: boolean })` | `GET /sessionserver/session/minecraft/profile/{uuid}[?unsigned=false]` | `GameProfile` |
+| `client.profile(uuid, { signed?: boolean })` | `GET /sessionserver/session/minecraft/profile/{uuid}[?unsigned=true\|false]` | `GameProfile` |
 | `client.bulkProfiles(names)` | `POST /api/profiles/minecraft` | `GameProfile[]` |
 | `client.meta()` | `GET /` | `YggdrasilMeta` |
 

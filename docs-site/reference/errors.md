@@ -38,13 +38,15 @@ Raised by:
 - `buildTexturesPayload` when `profileId` isn't 32 hex chars or `profileName`
   is empty.
 - `decodeTexturesPayloadBase64` when the base64 doesn't decode or the decoded
-  text isn't JSON.
+  text isn't JSON, or when decoded JSON doesn't match the textures payload
+  schema.
 
 | Field | Meaning |
 |---|---|
 | `code` | `'invalid_textures_input'` |
 | `message` | Human-readable description (e.g. `"profileId must be a 32-char undashed hex UUID"`). |
-| `cause` | The original `Error` from `atob` / `JSON.parse` when the decoder failed. |
+| `context.stage` | `'base64'`, `'json'`, or `'shape'` for decoder failures. |
+| `cause` | The original `Error` from `atob` / `JSON.parse` when available, or the `ZodError` when the decoder failed shape validation. |
 
 ### `invalid_png`
 
@@ -56,6 +58,7 @@ Raised by `assertPngBuffer`. The non-throwing `validatePngBuffer` returns
 | `code` | `'invalid_png'` |
 | `message` | Human-readable reason (e.g. `"skin dimensions 128x128 are not supported (expected 64x64 or 64x32)"`). |
 | `context.kind` | `'skin'` or `'cape'`. |
+| `context.reason` | Same reason string as `message`, suitable for logs or structured telemetry. |
 
 ## `YggdrasilClientErrorCode`
 

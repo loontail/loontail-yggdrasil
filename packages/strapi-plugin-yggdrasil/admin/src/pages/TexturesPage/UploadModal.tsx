@@ -1,5 +1,5 @@
 import { Box, Button, Flex, Modal, TextInput, Typography } from '@strapi/design-system';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from 'styled-components';
 import { texturesApi } from '../../api/texturesApi';
 import defaultCapeAsset from '../../assets/default-cape.png';
@@ -123,6 +123,20 @@ const UploadModal = ({ onSkinUploaded, onCapeUploaded, onClose }: Props) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(
+    () => () => {
+      if (skinPreview) URL.revokeObjectURL(skinPreview);
+    },
+    [skinPreview],
+  );
+
+  useEffect(
+    () => () => {
+      if (capePreview) URL.revokeObjectURL(capePreview);
+    },
+    [capePreview],
+  );
+
   const handleSkinFile = useCallback(
     (file: File) => {
       if (file.type !== 'image/png') {
@@ -131,10 +145,7 @@ const UploadModal = ({ onSkinUploaded, onCapeUploaded, onClose }: Props) => {
       }
       setError(null);
       setSkinFile(file);
-      setSkinPreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(file);
-      });
+      setSkinPreview(URL.createObjectURL(file));
     },
     [translate],
   );
@@ -147,10 +158,7 @@ const UploadModal = ({ onSkinUploaded, onCapeUploaded, onClose }: Props) => {
       }
       setError(null);
       setCapeFile(file);
-      setCapePreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(file);
-      });
+      setCapePreview(URL.createObjectURL(file));
     },
     [translate],
   );

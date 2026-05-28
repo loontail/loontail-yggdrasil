@@ -12,17 +12,31 @@ const getAuthHeader = (): string => {
 
 const base = '/yggdrasil/textures';
 
+const errorMessageFrom = async (response: Response): Promise<string> => {
+  const text = await response.text().catch(() => '');
+  if (!text) return response.statusText || 'Request failed';
+  try {
+    const body = JSON.parse(text) as { errorMessage?: unknown; message?: unknown };
+    if (typeof body.errorMessage === 'string') return body.errorMessage;
+    if (typeof body.message === 'string') return body.message;
+  } catch {
+    return text;
+  }
+  return text;
+};
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const authHeader = getAuthHeader();
   const res = await fetch(`${base}${path}`, {
     ...init,
     headers: {
-      Authorization: getAuthHeader(),
+      Accept: 'application/json',
+      ...(authHeader ? { Authorization: authHeader } : {}),
       ...(init?.headers ?? {}),
     },
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`${res.status} ${text}`);
+    throw new Error(`${res.status} ${await errorMessageFrom(res)}`);
   }
   return res.json() as Promise<T>;
 };

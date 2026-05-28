@@ -1,7 +1,9 @@
 import { YggdrasilCoreError, YggdrasilCoreErrorCodes } from '../errors/yggdrasil-core-error.js';
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
+const IHDR_LENGTH = 13;
 const PNG_HEADER_MIN_BYTES = 24;
+const IHDR_LENGTH_OFFSET = 8;
 const IHDR_TYPE_OFFSET = 12;
 const IHDR_WIDTH_OFFSET = 16;
 const IHDR_HEIGHT_OFFSET = 20;
@@ -47,6 +49,10 @@ export const validatePngBuffer = (
       .join('');
     return { ok: false, reason: `file is not a PNG (header ${head})` };
   }
+  const ihdrLength = readUInt32BE(view, IHDR_LENGTH_OFFSET);
+  if (ihdrLength !== IHDR_LENGTH) {
+    return { ok: false, reason: `IHDR chunk length is ${ihdrLength}, expected ${IHDR_LENGTH}` };
+  }
   const ihdrType = String.fromCharCode(
     view[IHDR_TYPE_OFFSET] ?? 0,
     view[IHDR_TYPE_OFFSET + 1] ?? 0,
@@ -76,6 +82,6 @@ export const assertPngBuffer = (
   const verdict = validatePngBuffer(buffer, kind);
   if (verdict.ok) return { width: verdict.width, height: verdict.height };
   throw new YggdrasilCoreError(YggdrasilCoreErrorCodes.INVALID_PNG, verdict.reason, {
-    context: { kind },
+    context: { kind, reason: verdict.reason },
   });
 };

@@ -40,8 +40,10 @@ const validator = (config: YggdrasilPluginConfig): void => {
   }
   try {
     void new URL(config.publicUrl);
-  } catch {
-    throw new Error(`yggdrasil plugin: \`publicUrl\` is not a valid URL: ${config.publicUrl}`);
+  } catch (err) {
+    throw new Error(`yggdrasil plugin: \`publicUrl\` is not a valid URL: ${config.publicUrl}`, {
+      cause: err,
+    });
   }
   if (config.tokens.accessTtlSeconds <= 0) {
     throw new Error('yggdrasil plugin: `tokens.accessTtlSeconds` must be > 0');

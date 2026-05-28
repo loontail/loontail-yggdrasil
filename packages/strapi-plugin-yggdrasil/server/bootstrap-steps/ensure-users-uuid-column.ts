@@ -13,8 +13,15 @@ export const ensureUsersUuidColumn = async (strapi: StrapiInstance): Promise<voi
       'CREATE UNIQUE INDEX IF NOT EXISTS up_users_uuid_uniq ON up_users (uuid) WHERE uuid IS NOT NULL',
     );
   } catch (err) {
-    strapi.log.warn(
-      `[yggdrasil] Could not create partial unique index on up_users.uuid: ${(err as Error).message}`,
+    const reason = err instanceof Error ? err.message : String(err);
+    strapi.log.debug(
+      `[yggdrasil] Partial uuid index not supported, trying plain unique index: ${reason}`,
     );
+    try {
+      await knex.raw('CREATE UNIQUE INDEX up_users_uuid_uniq ON up_users (uuid)');
+    } catch (fallbackErr) {
+      const reason = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      strapi.log.warn(`[yggdrasil] Could not create unique index on up_users.uuid: ${reason}`);
+    }
   }
 };

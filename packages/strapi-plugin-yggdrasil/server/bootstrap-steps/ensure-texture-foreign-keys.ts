@@ -8,9 +8,13 @@ export const ensureTextureForeignKeys = async (strapi: StrapiInstance): Promise<
     if (!(await knex.schema.hasTable(table))) continue;
     const constraintName = `${table}_user_fk`;
     try {
-      await knex.raw(
-        `ALTER TABLE ${table} ADD CONSTRAINT ${constraintName} FOREIGN KEY ("userId") REFERENCES up_users(id) ON DELETE CASCADE`,
-      );
+      await knex.schema.alterTable(table, (builder) => {
+        builder
+          .foreign('userId', constraintName)
+          .references('id')
+          .inTable('up_users')
+          .onDelete('CASCADE');
+      });
       strapi.log.info(`[yggdrasil] added FK ${constraintName}`);
     } catch (err) {
       strapi.log.debug(

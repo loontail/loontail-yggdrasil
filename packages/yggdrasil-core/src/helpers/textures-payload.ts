@@ -1,3 +1,4 @@
+import { TexturesPayloadSchema } from '../contracts/textures-payload.js';
 import { YggdrasilCoreError, YggdrasilCoreErrorCodes } from '../errors/yggdrasil-core-error.js';
 import {
   type SkinVariant,
@@ -7,6 +8,15 @@ import {
   type TexturesPayload,
 } from '../types/textures.js';
 import { isUuidUndashed } from './uuid.js';
+
+const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}={0,2}|[A-Za-z0-9+/]{3}=?)?$/;
+
+const normalizeBase64 = (encoded: string): string | null => {
+  if (!encoded || encoded.trim() !== encoded || encoded.length % 4 === 1) return null;
+  if (!BASE64_RE.test(encoded)) return null;
+  const padding = encoded.length % 4 === 0 ? 0 : 4 - (encoded.length % 4);
+  return `${encoded}${'='.repeat(padding)}`;
+};
 
 export type BuildTexturesPayloadInput = {
   readonly profileId: string;
@@ -26,13 +36,14 @@ export const buildTexturesPayload = (input: BuildTexturesPayloadInput): Textures
     throw new YggdrasilCoreError(
       YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT,
       'profileId must be a 32-character undashed hex UUID',
-      { context: { profileId: input.profileId } },
+      { context: { field: 'profileId', value: input.profileId } },
     );
   }
   if (!input.profileName) {
     throw new YggdrasilCoreError(
       YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT,
       'profileName must be non-empty',
+      { context: { field: 'profileName' } },
     );
   }
 
@@ -65,11 +76,19 @@ export const encodeTexturesPayloadBase64 = (payload: TexturesPayload): string =>
 
 export const decodeTexturesPayloadBase64 = (encoded: string): TexturesPayload => {
   let json: string;
+  const normalized = normalizeBase64(encoded);
+  if (!normalized) {
+    throw new YggdrasilCoreError(
+      YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT,
+      'textures payload is not valid base64',
+      { context: { stage: 'base64' } },
+    );
+  }
   try {
     if (typeof Buffer !== 'undefined') {
-      json = Buffer.from(encoded, 'base64').toString('utf8');
+      json = Buffer.from(normalized, 'base64').toString('utf8');
     } else {
-      const binary = globalThis.atob(encoded);
+      const binary = globalThis.atob(normalized);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       json = new TextDecoder().decode(bytes);
@@ -78,16 +97,26 @@ export const decodeTexturesPayloadBase64 = (encoded: string): TexturesPayload =>
     throw new YggdrasilCoreError(
       YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT,
       'textures payload is not valid base64',
-      { cause: err },
+      { context: { stage: 'base64' }, cause: err },
     );
   }
+  let raw: unknown;
   try {
-    return JSON.parse(json) as TexturesPayload;
+    raw = JSON.parse(json) as unknown;
   } catch (err) {
     throw new YggdrasilCoreError(
       YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT,
       'textures payload is not valid JSON',
-      { cause: err },
+      { context: { stage: 'json' }, cause: err },
     );
   }
+  const parsed = TexturesPayloadSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new YggdrasilCoreError(
+      YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT,
+      'textures payload JSON does not match the expected shape',
+      { context: { stage: 'shape' }, cause: parsed.error },
+    );
+  }
+  return parsed.data;
 };

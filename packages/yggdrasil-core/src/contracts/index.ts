@@ -32,3 +32,5 @@ export {
 
 export type { TexturesLookupResponse } from './textures-api.js';
 export { TexturesLookupResponseSchema } from './textures-api.js';
+
+export { TexturesPayloadSchema } from './textures-payload.js';

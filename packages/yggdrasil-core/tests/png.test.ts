@@ -18,13 +18,15 @@ const writeUInt32BE = (view: Uint8Array, offset: number, value: number): void =>
   view[offset + 3] = value & 0xff;
 };
 
-/** Build a 24-byte PNG header (signature + IHDR type + width/height). */
-const makePngHeader = (width: number, height: number, ihdrType = 'IHDR'): Uint8Array => {
+const makePngHeader = (
+  width: number,
+  height: number,
+  ihdrType = 'IHDR',
+  ihdrLength = 13,
+): Uint8Array => {
   const buf = new Uint8Array(24);
   buf.set(PNG_SIGNATURE, 0);
-  // bytes 8..11 = IHDR chunk length (13). We don't validate this, but real
-  // PNGs always have it.
-  writeUInt32BE(buf, 8, 13);
+  writeUInt32BE(buf, 8, ihdrLength);
   buf[12] = ihdrType.charCodeAt(0);
   buf[13] = ihdrType.charCodeAt(1);
   buf[14] = ihdrType.charCodeAt(2);
@@ -86,6 +88,12 @@ describe('validatePngBuffer', () => {
     expect(!result.ok && result.reason).toContain('"sBIT"');
   });
 
+  it('rejects PNGs whose IHDR chunk length is not 13', () => {
+    const result = validatePngBuffer(makePngHeader(64, 64, 'IHDR', 12), SkinAssetKinds.SKIN);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toContain('IHDR chunk length is 12');
+  });
+
   it('accepts ArrayBuffer input (not just Uint8Array)', () => {
     const view = makePngHeader(64, 64);
     // Allocate a fresh ArrayBuffer so the type is unambiguously
@@ -112,7 +120,10 @@ describe('assertPngBuffer', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(YggdrasilCoreError);
       expect((err as YggdrasilCoreError).code).toBe(YggdrasilCoreErrorCodes.INVALID_PNG);
-      expect((err as YggdrasilCoreError).context).toEqual({ kind: 'skin' });
+      expect((err as YggdrasilCoreError).context).toEqual({
+        kind: 'skin',
+        reason: expect.stringContaining('file is not a PNG'),
+      });
     }
   });
 });

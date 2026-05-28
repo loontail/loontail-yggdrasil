@@ -41,7 +41,9 @@ export class YggdrasilClientError extends Error {
     if (options?.cause !== undefined) {
       (this as unknown as { cause: unknown }).cause = options.cause;
     }
-    Error.captureStackTrace(this, YggdrasilClientError);
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, YggdrasilClientError);
+    }
   }
 }
 

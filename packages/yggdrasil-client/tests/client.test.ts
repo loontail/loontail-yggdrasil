@@ -80,6 +80,19 @@ describe('YggdrasilClient', () => {
     );
   });
 
+  it('profile sends unsigned=true when signed is explicitly false', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => okJsonResponse(PROFILE));
+    const client = new YggdrasilClient({
+      apiRoot: 'https://example.test/api/yggdrasil',
+      fetch: fetcher,
+    });
+    await client.profile('aabbccddeeff00112233445566778899', { signed: false });
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://example.test/api/yggdrasil/sessionserver/session/minecraft/profile/aabbccddeeff00112233445566778899?unsigned=true',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
   it('rejects with INVALID_RESPONSE when the body fails schema validation', async () => {
     const fetcher = vi.fn<typeof fetch>(async () => okJsonResponse({ id: 'not-hex', name: 'X' }));
     const client = new YggdrasilClient({
@@ -127,6 +140,7 @@ describe('bulkProfiles input validation', () => {
     const names = Array.from({ length: 11 }, (_, i) => `name${i}`);
     await expect(client.bulkProfiles(names)).rejects.toMatchObject({
       code: YggdrasilClientErrorCodes.INVALID_REQUEST,
+      context: { count: 11 },
     });
     expect(fetcher).not.toHaveBeenCalled();
   });

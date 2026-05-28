@@ -57,8 +57,15 @@ export type KnexTableBuilder = {
   string(column: string, length?: number): KnexColumnBuilder;
   integer(column: string): KnexColumnBuilder;
   timestamp(column: string, options?: { useTz?: boolean }): KnexColumnBuilder;
+  foreign(column: string, constraintName?: string): KnexForeignBuilder;
   dropColumn(column: string): void;
   primary(columns: string | string[]): KnexColumnBuilder;
+};
+
+export type KnexForeignBuilder = {
+  references(column: string): KnexForeignBuilder;
+  inTable(table: string): KnexForeignBuilder;
+  onDelete(action: string): KnexForeignBuilder;
 };
 
 export type KnexColumnBuilder = {

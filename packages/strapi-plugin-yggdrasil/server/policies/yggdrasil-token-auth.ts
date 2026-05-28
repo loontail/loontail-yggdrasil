@@ -1,6 +1,11 @@
+import { YggdrasilErrorKinds } from '@loontail/yggdrasil-core';
 import { YggdrasilHttpError } from '../controllers/helpers';
 import type { TokensService } from '../services/tokens';
-import type { UsersService, YggdrasilUserRow } from '../services/users';
+import {
+  type UsersService,
+  type YggdrasilUserRow,
+  isYggdrasilUserEligible,
+} from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
 
 const HTTP_UNAUTHORIZED = 401;
@@ -30,7 +35,7 @@ declare module 'koa' {
 const unauthorized = (cause: string): never => {
   throw new YggdrasilHttpError(
     HTTP_UNAUTHORIZED,
-    'ForbiddenOperationException',
+    YggdrasilErrorKinds.Forbidden,
     'Invalid or expired access token.',
     cause,
   );
@@ -54,7 +59,7 @@ const yggdrasilTokenAuth = async (
   }
   const users = strapi.plugin('yggdrasil').service('users') as UsersService;
   const user: YggdrasilUserRow | null = await users.findById(validated.userId);
-  if (!user || user.blocked || !user.uuid) {
+  if (!isYggdrasilUserEligible(user) || !user.uuid) {
     unauthorized('user-not-eligible');
     return false;
   }

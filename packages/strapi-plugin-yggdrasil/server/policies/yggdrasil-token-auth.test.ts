@@ -112,6 +112,19 @@ describe('yggdrasilTokenAuth policy', () => {
     });
   });
 
+  it('rejects when the user is not confirmed', async () => {
+    const validate = vi.fn().mockResolvedValue(validatedToken(42));
+    const findById = vi.fn().mockResolvedValue(userRow({ confirmed: false }));
+    const strapi = buildStrapi({
+      tokens: { validate },
+      users: { findById },
+    });
+    const ctx = buildCtx({ authorization: 'Bearer good' });
+    await expect(yggdrasilTokenAuth(ctx, undefined, { strapi })).rejects.toSatisfy((err) => {
+      return isYggdrasilHttpError(err) && err.status === 401;
+    });
+  });
+
   it('attaches ctx.state.yggdrasilUser on success', async () => {
     const validate = vi.fn().mockResolvedValue(validatedToken(42));
     const findById = vi.fn().mockResolvedValue(userRow());

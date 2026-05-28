@@ -136,14 +136,14 @@ ProfileLookupQuerySchema = z.object({
   unsigned: z
     .union([z.literal('true'), z.literal('false'), z.boolean()])
     .optional()
-    .transform((v) => !(v === false || v === 'false')),
+    .transform((v) => v === true || v === 'true'),
 });
 ```
 
 The query schema accepts `'true'`, `'false'`, `true`, `false`, or omitted, and
-normalises to a boolean. The transform inverts: `unsigned=true` → `signed=false`.
-The default (when omitted) is `signed: true` because that's what the vanilla
-client expects.
+normalises to a boolean `unsigned` flag. `unsigned=true` strips the signature.
+The default (when omitted) is `unsigned: false`, so profile lookups are signed
+because that's what the vanilla client expects.
 
 ### `BulkProfilesRequestSchema`
 

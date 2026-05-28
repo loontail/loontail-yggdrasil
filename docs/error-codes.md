@@ -15,9 +15,9 @@ Defined in `packages/yggdrasil-core/src/errors/yggdrasil-core-error.ts`.
 | Code | Thrown by | Trigger | Context |
 |---|---|---|---|
 | `invalid_uuid` | `undashUuid`, `dashUuid` | Input doesn't match either UUID regex. | `{ value: string }` — the offending input (truncated to 48 chars). |
-| `invalid_textures_input` | `buildTexturesPayload` | `profileId` not 32 hex chars, or `profileName` empty. | `{ field: 'profileId' \| 'profileName' }`. |
-| `invalid_textures_input` | `decodeTexturesPayloadBase64` | base64 doesn't decode, or decoded text isn't JSON. | `{ stage: 'base64' \| 'json' }`. `cause` set to the underlying exception. |
-| `invalid_png` | `assertPngBuffer` | Buffer < 24 bytes / signature mismatch / first chunk not IHDR / dimensions not in allowed list. | `{ kind: 'skin' \| 'cape', reason: string }`. |
+| `invalid_textures_input` | `buildTexturesPayload` | `profileId` not 32 hex chars, or `profileName` empty. | `{ field: 'profileId' \| 'profileName', value?: string }`. |
+| `invalid_textures_input` | `decodeTexturesPayloadBase64` | base64 doesn't decode, decoded text isn't JSON, or decoded JSON doesn't match the textures payload schema. | `{ stage: 'base64' \| 'json' \| 'shape' }`. `cause` set when an underlying exception or `ZodError` is available. |
+| `invalid_png` | `assertPngBuffer` | Buffer < 24 bytes / signature mismatch / invalid IHDR chunk / dimensions not in allowed list. | `{ kind: 'skin' \| 'cape', reason: string }`. |
 
 ## `YggdrasilClientError` codes
 

@@ -9,6 +9,10 @@ export type YggdrasilUserRow = {
   readonly confirmed: boolean | null;
 };
 
+export const isYggdrasilUserEligible = <T extends Pick<YggdrasilUserRow, 'blocked' | 'confirmed'>>(
+  user: T | null,
+): user is T => Boolean(user && !user.blocked && user.confirmed !== false);
+
 const TABLE = 'up_users';
 const COLUMNS = ['id', 'username', 'uuid', 'blocked', 'confirmed'] as const;
 
@@ -50,6 +54,13 @@ export const createUsersService = ({ strapi }: { strapi: StrapiInstance }) => ({
     return toRow(row);
   },
 
+  async findByUsername(username: string): Promise<YggdrasilUserRow | null> {
+    const row = (await knex(strapi)(TABLE)
+      .whereRaw('LOWER(username) = ?', [username.toLowerCase()])
+      .first(...COLUMNS)) as Record<string, unknown> | undefined;
+    return toRow(row);
+  },
+
   async findByIdentifierWithPassword(
     identifier: string,
   ): Promise<(YggdrasilUserRow & { password: string }) | null> {
@@ -71,14 +82,7 @@ export const createUsersService = ({ strapi }: { strapi: StrapiInstance }) => ({
     if (existing.uuid) return existing.uuid.toLowerCase();
 
     const fresh = randomUndashedUuid();
-    const result = (await knex(strapi)(TABLE)
-      .where({ id: userId })
-      .whereNull('uuid')
-      .update({ uuid: fresh })
-      .returning('uuid')) as Record<string, unknown>[];
-    if (result.length > 0 && result[0]?.uuid) {
-      return String(result[0].uuid).toLowerCase();
-    }
+    await knex(strapi)(TABLE).where({ id: userId }).whereNull('uuid').update({ uuid: fresh });
     const after = await this.findById(userId);
     if (!after?.uuid) {
       throw new Error(`Failed to assign uuid to up_users row ${userId}`);

@@ -3,6 +3,7 @@ import {
   YggdrasilCoreError,
   YggdrasilCoreErrorCodes,
   buildTexturesPayload,
+  decodeTexturesPayloadBase64,
   encodeTexturesPayloadBase64,
 } from '../src/index.js';
 
@@ -82,5 +83,40 @@ describe('encodeTexturesPayloadBase64', () => {
     const b64 = encodeTexturesPayloadBase64(payload);
     const decoded = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
     expect(decoded).toEqual(payload);
+  });
+});
+
+describe('decodeTexturesPayloadBase64', () => {
+  it('round-trips a valid textures payload', () => {
+    const payload = buildTexturesPayload({
+      profileId: PROFILE_ID,
+      profileName: 'Steve',
+      skin: { url: 'https://example.com/s.png', variant: 'CLASSIC' },
+      timestamp: 1_700_000_000_000,
+    });
+    expect(decodeTexturesPayloadBase64(encodeTexturesPayloadBase64(payload))).toEqual(payload);
+  });
+
+  it('rejects decoded JSON that does not match the textures payload schema', () => {
+    const encoded = Buffer.from(JSON.stringify({ textures: {} }), 'utf8').toString('base64');
+    expect(() => decodeTexturesPayloadBase64(encoded)).toThrowError(YggdrasilCoreError);
+    try {
+      decodeTexturesPayloadBase64(encoded);
+      expect.fail('expected throw');
+    } catch (err) {
+      expect((err as YggdrasilCoreError).code).toBe(YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT);
+      expect((err as YggdrasilCoreError).context).toEqual({ stage: 'shape' });
+    }
+  });
+
+  it('rejects malformed base64 before JSON parsing', () => {
+    expect(() => decodeTexturesPayloadBase64('not base64!')).toThrowError(YggdrasilCoreError);
+    try {
+      decodeTexturesPayloadBase64('not base64!');
+      expect.fail('expected throw');
+    } catch (err) {
+      expect((err as YggdrasilCoreError).code).toBe(YggdrasilCoreErrorCodes.INVALID_TEXTURES_INPUT);
+      expect((err as YggdrasilCoreError).context).toEqual({ stage: 'base64' });
+    }
   });
 });

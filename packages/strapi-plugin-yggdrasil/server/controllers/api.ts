@@ -1,5 +1,5 @@
 import { BulkProfilesRequestSchema } from '@loontail/yggdrasil-core';
-import type { UsersService } from '../services/users';
+import { type UsersService, isYggdrasilUserEligible } from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
 import { parseOrThrow, pluginService } from './helpers';
 
@@ -11,8 +11,8 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
     const users = pluginService<UsersService>(strapi, 'users');
     const resolved = await Promise.all(
       names.map(async (name): Promise<ProfileSummary | null> => {
-        const row = await users.findByIdentifier(name);
-        if (!row || !row.uuid || row.blocked) return null;
+        const row = await users.findByUsername(name);
+        if (!isYggdrasilUserEligible(row) || !row.uuid) return null;
         return { id: row.uuid, name: row.username };
       }),
     );

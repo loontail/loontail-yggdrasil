@@ -1,10 +1,16 @@
+import { YggdrasilErrorKinds } from '@loontail/yggdrasil-core';
+import { z } from 'zod';
 import type { StorageService } from '../services/storage';
 import type { AssetKind, TexturesStoreService } from '../services/textures-store';
-import type { UsersService, YggdrasilUserRow } from '../services/users';
+import {
+  type UsersService,
+  type YggdrasilUserRow,
+  isYggdrasilUserEligible,
+} from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
 import { buildPaginationMeta, parseListQuery } from '../utils/http';
 import { pluginService } from '../utils/strapi-runtime';
-import { YggdrasilHttpError } from './helpers';
+import { YggdrasilHttpError, parseOrThrow } from './helpers';
 import {
   MAX_UPLOAD_BYTES,
   parseVariant,
@@ -13,46 +19,60 @@ import {
 } from './textures-helpers';
 
 const HTTP_BAD_REQUEST = 400;
+const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
+const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const MAX_UPLOAD_BASE64_CHARS = Math.ceil((MAX_UPLOAD_BYTES / 3) * 4) + 4;
+
+const OptionalNonEmptyStringSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() ? value.trim() : undefined),
+  z.string().optional(),
+);
+
+const AdminBase64UploadSchema = z.object({
+  userId: z.coerce.number().int().positive(),
+  fileBase64: z
+    .string()
+    .min(1)
+    .max(MAX_UPLOAD_BASE64_CHARS, 'fileBase64 exceeds the maximum upload size')
+    .regex(BASE64_RE, 'fileBase64 must be valid base64'),
+  username: OptionalNonEmptyStringSchema,
+  variant: z.unknown().optional(),
+});
 
 const adminBase64Upload = async (
   strapi: StrapiInstance,
   kind: AssetKind,
   ctx: KoaContext,
 ): Promise<void> => {
-  const body = (ctx.request.body as Record<string, unknown>) ?? {};
-  const userId = Number(body.userId);
-  if (!userId) {
-    throw new YggdrasilHttpError(HTTP_BAD_REQUEST, 'IllegalArgumentException', 'userId required.');
-  }
-  const fileBase64 = body.fileBase64 as string | undefined;
-  if (!fileBase64) {
-    throw new YggdrasilHttpError(
-      HTTP_BAD_REQUEST,
-      'IllegalArgumentException',
-      'fileBase64 required.',
-    );
-  }
-  const buffer = Buffer.from(fileBase64, 'base64');
+  const body = parseOrThrow(ctx, AdminBase64UploadSchema, ctx.request.body);
+  const buffer = Buffer.from(body.fileBase64, 'base64');
   if (buffer.length > MAX_UPLOAD_BYTES) {
     throw new YggdrasilHttpError(
       HTTP_BAD_REQUEST,
-      'IllegalArgumentException',
+      YggdrasilErrorKinds.IllegalArgument,
       `File exceeds maximum size of ${MAX_UPLOAD_BYTES} bytes.`,
     );
   }
   validatePngOrThrow(buffer, kind);
   const users = pluginService<UsersService>(strapi, 'users');
-  const user: YggdrasilUserRow | null = await users.findById(userId);
+  const user: YggdrasilUserRow | null = await users.findById(body.userId);
   if (!user || !user.uuid) {
     throw new YggdrasilHttpError(
       HTTP_NOT_FOUND,
-      'IllegalArgumentException',
+      YggdrasilErrorKinds.IllegalArgument,
       'User has no Yggdrasil UUID yet (must log in once).',
     );
   }
+  if (!isYggdrasilUserEligible(user)) {
+    throw new YggdrasilHttpError(
+      HTTP_FORBIDDEN,
+      YggdrasilErrorKinds.Forbidden,
+      'User is blocked or not confirmed.',
+    );
+  }
   const variant = kind === 'skin' ? parseVariant(body.variant) : undefined;
-  const username = (body.username as string) || user.username;
+  const username = body.username ?? user.username;
   ctx.body = await persistAsset(
     strapi,
     kind,
@@ -69,7 +89,11 @@ const adminDeleteRow = async (
 ): Promise<void> => {
   const id = Number(ctx.params.id);
   if (!id) {
-    throw new YggdrasilHttpError(HTTP_BAD_REQUEST, 'IllegalArgumentException', 'id required.');
+    throw new YggdrasilHttpError(
+      HTTP_BAD_REQUEST,
+      YggdrasilErrorKinds.IllegalArgument,
+      'id required.',
+    );
   }
   const store = pluginService<TexturesStoreService>(strapi, 'textures-store');
   const storage = pluginService<StorageService>(strapi, 'storage');
@@ -78,7 +102,14 @@ const adminDeleteRow = async (
     ctx.status = HTTP_NOT_FOUND;
     return;
   }
-  if (row.filePath) storage.deleteIfExists(row.filePath);
+  if (row.filePath) {
+    try {
+      storage.deleteIfExists(row.filePath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      strapi.log.warn(`[yggdrasil] could not delete ${kind} file for row ${id}: ${message}`);
+    }
+  }
   await store.deleteById(kind, id);
   ctx.body = { success: true };
 };

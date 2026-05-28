@@ -58,14 +58,7 @@ const toLegacyRow = (raw: RawLegacyRow): LegacyRow => ({
 
 const readLegacy = async (knex: Knex, table: string): Promise<LegacyRow[]> => {
   if (!(await knex.schema.hasTable(table))) return [];
-  const rows = (await knex(table).select(
-    'id',
-    'userId',
-    'username',
-    'filePath',
-    'fileUrl',
-    'fileSize',
-  )) as unknown as RawLegacyRow[];
+  const rows = (await knex(table).select('*')) as unknown as RawLegacyRow[];
   return rows.map(toLegacyRow);
 };
 
@@ -97,6 +90,7 @@ const detectVariantSafely = (diskPath: string): 'CLASSIC' | 'SLIM' => {
     const detected = detectMojangSkinVariant(buf);
     return detected.toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
   } catch {
+    // Legacy rows can point at deleted files; default to CLASSIC and let copy planning skip missing sources.
     return 'CLASSIC';
   }
 };
@@ -167,19 +161,23 @@ const legacyDiskPath = (strapi: StrapiInstance, storedFilePath: string): string 
   return resolve(strapi.dirs.app.root, storedFilePath);
 };
 
-const copyFiles = (strapi: StrapiInstance, plans: CopyPlan[]): void => {
+const copyFiles = (strapi: StrapiInstance, plans: CopyPlan[]): CopyPlan[] => {
+  const copied: CopyPlan[] = [];
   for (const plan of plans) {
     const source = legacyDiskPath(strapi, plan.legacy.filePath);
-    if (!existsSync(source)) {
-      strapi.log.warn(
-        `[yggdrasil] migration: source PNG missing for ${plan.kind} row ${plan.legacy.id} (${source})`,
-      );
-      continue;
+    if (!existsSync(plan.newFilePath)) {
+      if (!existsSync(source)) {
+        strapi.log.warn(
+          `[yggdrasil] migration: source PNG missing for ${plan.kind} row ${plan.legacy.id} (${source})`,
+        );
+        continue;
+      }
+      mkdirSync(dirname(plan.newFilePath), { recursive: true });
+      copyFileSync(source, plan.newFilePath);
     }
-    if (existsSync(plan.newFilePath)) continue;
-    mkdirSync(dirname(plan.newFilePath), { recursive: true });
-    copyFileSync(source, plan.newFilePath);
+    copied.push(plan);
   }
+  return copied;
 };
 
 const insertNewRows = async (knex: Knex, plans: CopyPlan[]): Promise<void> => {
@@ -268,10 +266,10 @@ export const runSkinsRegistryMerge = async (strapi: StrapiInstance): Promise<voi
 
   const plans = await planCopies(strapi, storage, knex, legacySkins, legacyCapes);
 
-  copyFiles(strapi, plans);
+  const copiedPlans = copyFiles(strapi, plans);
 
   await knex.transaction(async (trx) => {
-    await insertNewRows(trx, plans);
+    await insertNewRows(trx, copiedPlans);
     await dropLegacyTables(trx);
     await dropUpUsersColumns(trx, strapi);
     await trx(MARKER_TABLE).insert({ key: MARKER_KEY, appliedAt: new Date() });

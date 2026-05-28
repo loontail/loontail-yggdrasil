@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { undashUuid } from '@loontail/yggdrasil-core';
+import { readFile } from 'node:fs/promises';
+import { YggdrasilErrorKinds, undashUuid } from '@loontail/yggdrasil-core';
 import type { StorageService } from '../services/storage';
 import type { AssetKind, TexturesStoreService } from '../services/textures-store';
-import type { UsersService } from '../services/users';
+import { type UsersService, isYggdrasilUserEligible } from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
 import { pluginService } from '../utils/strapi-runtime';
 import { YggdrasilHttpError } from './helpers';
@@ -18,7 +18,6 @@ const HTTP_NO_CONTENT = 204;
 
 type FormidableFile = {
   readonly filepath: string;
-  readonly mimetype: string | null;
   readonly size: number;
 };
 
@@ -34,7 +33,7 @@ const requireUser = (ctx: KoaContext) => {
   const user = (ctx.state as { yggdrasilUser?: { id: number; uuid: string; username: string } })
     .yggdrasilUser;
   if (!user) {
-    throw new YggdrasilHttpError(401, 'ForbiddenOperationException', 'Authentication required.');
+    throw new YggdrasilHttpError(401, YggdrasilErrorKinds.Forbidden, 'Authentication required.');
   }
   return user;
 };
@@ -47,23 +46,20 @@ const handleSelfUpload = async (
   const owner = requireUser(ctx);
   const file = getFormidableFile((ctx.request as { files?: unknown }).files, 'file');
   if (!file) {
-    throw new YggdrasilHttpError(HTTP_BAD_REQUEST, 'IllegalArgumentException', 'No file uploaded.');
-  }
-  if (file.mimetype !== 'image/png') {
     throw new YggdrasilHttpError(
       HTTP_BAD_REQUEST,
-      'IllegalArgumentException',
-      'File must be a PNG.',
+      YggdrasilErrorKinds.IllegalArgument,
+      'No file uploaded.',
     );
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new YggdrasilHttpError(
       HTTP_BAD_REQUEST,
-      'IllegalArgumentException',
+      YggdrasilErrorKinds.IllegalArgument,
       `File exceeds maximum size of ${MAX_UPLOAD_BYTES} bytes.`,
     );
   }
-  const buffer = readFileSync(file.filepath);
+  const buffer = await readFile(file.filepath);
   validatePngOrThrow(buffer, kind);
   const variant =
     kind === 'skin'
@@ -83,7 +79,14 @@ const handleSelfDelete = async (
   const store = pluginService<TexturesStoreService>(strapi, 'textures-store');
   const storage = pluginService<StorageService>(strapi, 'storage');
   const existing = await store.findByUserId(kind, owner.id);
-  if (existing?.filePath) storage.deleteIfExists(existing.filePath);
+  if (existing?.filePath) {
+    try {
+      storage.deleteIfExists(existing.filePath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      strapi.log.warn(`[yggdrasil] could not delete ${kind} file for user ${owner.id}: ${message}`);
+    }
+  }
   await store.deleteByUserId(kind, owner.id);
   ctx.status = HTTP_NO_CONTENT;
   ctx.body = null;
@@ -96,7 +99,7 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
     const undashed = undashUuid(String(ctx.params.uuid ?? ''));
     const users = pluginService<UsersService>(strapi, 'users');
     const user = await users.findByUuid(undashed);
-    if (!user) {
+    if (!isYggdrasilUserEligible(user)) {
       ctx.body = { skin: null, cape: null };
       return;
     }

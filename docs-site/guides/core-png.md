@@ -94,9 +94,10 @@ import { assertPngBuffer } from '@loontail/yggdrasil-core';
 const { width, height } = assertPngBuffer(buffer, 'skin');
 ```
 
-Same checks, throws `YggdrasilCoreError(invalid_png, reason, { context: { kind } })`
-on failure. `context.kind` tells you whether the check was for a skin or a
-cape so a generic error logger can format it.
+Same checks, throws
+`YggdrasilCoreError(invalid_png, reason, { context: { kind, reason } })` on
+failure. `context.kind` tells you whether the check was for a skin or a cape;
+`context.reason` carries the validator reason for structured logs.
 
 ## Accepted input types
 

@@ -79,7 +79,7 @@ const TexturesPage = () => {
             : translate('validate.toast.ok'),
       });
     } catch {
-      toggleNotification({ type: 'warning', message: 'Validation failed' });
+      toggleNotification({ type: 'warning', message: translate('validate.toast.failed') });
     } finally {
       setValidating(false);
     }
@@ -100,7 +100,7 @@ const TexturesPage = () => {
         }),
       });
     } catch {
-      toggleNotification({ type: 'warning', message: 'Purge failed' });
+      toggleNotification({ type: 'warning', message: translate('purge.toast.failed') });
     } finally {
       setPurging(false);
     }

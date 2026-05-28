@@ -1,3 +1,4 @@
+import { YggdrasilErrorKinds } from '@loontail/yggdrasil-core';
 import type { ZodTypeAny, z } from 'zod';
 import type { KoaContext } from '../types';
 
@@ -16,7 +17,7 @@ export const parseOrThrow = <S extends ZodTypeAny>(
     const message = parsed.error.issues
       .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
       .join('; ');
-    throw new YggdrasilHttpError(HTTP_BAD_REQUEST, 'IllegalArgumentException', message);
+    throw new YggdrasilHttpError(HTTP_BAD_REQUEST, YggdrasilErrorKinds.IllegalArgument, message);
   }
   return parsed.data;
 };

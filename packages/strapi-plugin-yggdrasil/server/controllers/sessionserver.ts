@@ -4,12 +4,17 @@ import {
   JoinRequestSchema,
   ProfileLookupParamSchema,
   ProfileLookupQuerySchema,
+  YggdrasilErrorKinds,
   undashUuid,
 } from '@loontail/yggdrasil-core';
 import type { JoinSessionsService } from '../services/join-sessions';
 import type { TexturesPropertyService } from '../services/textures-property';
 import type { TokensService } from '../services/tokens';
-import type { UsersService, YggdrasilUserRow } from '../services/users';
+import {
+  type UsersService,
+  type YggdrasilUserRow,
+  isYggdrasilUserEligible,
+} from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
 import { YggdrasilHttpError, parseOrThrow, pluginService } from './helpers';
 
@@ -24,7 +29,7 @@ const buildProfile = async (
   if (!user.uuid) {
     throw new YggdrasilHttpError(
       HTTP_FORBIDDEN,
-      'ForbiddenOperationException',
+      YggdrasilErrorKinds.Forbidden,
       'Profile has no UUID.',
     );
   }
@@ -46,13 +51,17 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
 
     const token = await tokens.validate(body.accessToken);
     if (!token) {
-      throw new YggdrasilHttpError(HTTP_FORBIDDEN, 'ForbiddenOperationException', 'Invalid token.');
+      throw new YggdrasilHttpError(HTTP_FORBIDDEN, YggdrasilErrorKinds.Forbidden, 'Invalid token.');
     }
     const owner = await users.findById(token.userId);
-    if (!owner || !owner.uuid || owner.uuid.toLowerCase() !== body.selectedProfile.toLowerCase()) {
+    if (
+      !isYggdrasilUserEligible(owner) ||
+      !owner?.uuid ||
+      owner.uuid.toLowerCase() !== body.selectedProfile.toLowerCase()
+    ) {
       throw new YggdrasilHttpError(
         HTTP_FORBIDDEN,
-        'ForbiddenOperationException',
+        YggdrasilErrorKinds.Forbidden,
         'Profile does not match access token.',
       );
     }
@@ -79,7 +88,10 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
       return;
     }
     const user = await users.findById(entry.userId);
-    if (!user || user.blocked || user.username.toLowerCase() !== query.username.toLowerCase()) {
+    if (
+      !isYggdrasilUserEligible(user) ||
+      user?.username.toLowerCase() !== query.username.toLowerCase()
+    ) {
       ctx.status = HTTP_NO_CONTENT;
       ctx.body = null;
       return;
@@ -92,7 +104,7 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
     const query = parseOrThrow(ctx, ProfileLookupQuerySchema, ctx.request.query);
     const users = pluginService<UsersService>(strapi, 'users');
     const found = await users.findByUuid(undashUuid(params.uuid));
-    if (!found || found.blocked) {
+    if (!isYggdrasilUserEligible(found)) {
       ctx.status = HTTP_NO_CONTENT;
       ctx.body = null;
       return;
