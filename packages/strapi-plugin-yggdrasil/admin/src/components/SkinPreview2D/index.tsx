@@ -14,7 +14,7 @@ interface Props {
   type?: 'skin' | 'cape';
 }
 
-function drawSkin(ctx: CanvasRenderingContext2D, img: HTMLImageElement): void {
+const drawSkin = (ctx: CanvasRenderingContext2D, img: HTMLImageElement): void => {
   const isLegacy = img.height <= 32;
 
   ctx.imageSmoothingEnabled = false;
@@ -51,9 +51,9 @@ function drawSkin(ctx: CanvasRenderingContext2D, img: HTMLImageElement): void {
     drawRegion(4, 36, 4, 12, 4, 20); // right leg overlay
     drawRegion(4, 52, 4, 12, 8, 20); // left leg overlay
   }
-}
+};
 
-function drawCape(ctx: CanvasRenderingContext2D, img: HTMLImageElement): void {
+const drawCape = (ctx: CanvasRenderingContext2D, img: HTMLImageElement): void => {
   ctx.imageSmoothingEnabled = false;
   // Cape front face in 64×32 layout: (1,1,10,16)
   const sw = 10;
@@ -64,7 +64,19 @@ function drawCape(ctx: CanvasRenderingContext2D, img: HTMLImageElement): void {
   const dx = Math.round((CANVAS_W - dw) / 2);
   const dy = Math.round((CANVAS_H - dh) / 2);
   ctx.drawImage(img, 1, 1, sw, sh, dx, dy, dw, dh);
-}
+};
+
+const drawByType = (
+  ctx: CanvasRenderingContext2D,
+  type: 'skin' | 'cape',
+  img: HTMLImageElement,
+): void => {
+  if (type === 'cape') {
+    drawCape(ctx, img);
+    return;
+  }
+  drawSkin(ctx, img);
+};
 
 const SkinPreview2D = ({ skinUrl, capeUrl, type = 'skin' }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -85,11 +97,7 @@ const SkinPreview2D = ({ skinUrl, capeUrl, type = 'skin' }: Props) => {
     img.onload = () => {
       if (cancelled) return;
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      if (type === 'cape') {
-        drawCape(ctx, img);
-      } else {
-        drawSkin(ctx, img);
-      }
+      drawByType(ctx, type, img);
     };
 
     img.onerror = () => {
@@ -99,8 +107,7 @@ const SkinPreview2D = ({ skinUrl, capeUrl, type = 'skin' }: Props) => {
       fallback.onload = () => {
         if (cancelled) return;
         ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-        if (type === 'cape') drawCape(ctx, fallback);
-        else drawSkin(ctx, fallback);
+        drawByType(ctx, type, fallback);
       };
       fallback.src = type === 'cape' ? defaultCapeAsset : defaultSkinAsset;
     };
