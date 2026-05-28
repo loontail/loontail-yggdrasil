@@ -67,5 +67,8 @@
   "validate.badge": "missing",
   "validate.toast.ok": "All files present — no issues found.",
   "validate.toast.missing": "{count, plural, one {# entry is missing} other {# entries are missing}} from disk.",
-  "purge.toast.success": "Deleted {deletedSkins} skins and {deletedCapes} capes from database."
+  "purge.toast.success": "Deleted {deletedSkins} skins and {deletedCapes} capes from database.",
+
+  "load.toast.failed.skins": "Failed to load skins. Check that you are signed in and try again.",
+  "load.toast.failed.capes": "Failed to load capes. Check that you are signed in and try again."
 }

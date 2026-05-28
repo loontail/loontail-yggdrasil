@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type FetchFn<T> = (
   search: string,
@@ -25,9 +25,11 @@ interface PaginatedListActions {
   refresh: () => void;
 }
 
+const SEARCH_DEBOUNCE_MS = 350;
+
 export function usePaginatedList<T>(
   fetchFn: FetchFn<T>,
-  _pageSize: number,
+  onError?: (err: unknown) => void,
 ): [PaginatedListState<T>, PaginatedListActions] {
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -36,7 +38,7 @@ export function usePaginatedList<T>(
   const [loading, setLoading] = useState(false);
   const [search, setSearchValue] = useState('');
 
-  const stableFetch = useCallback(
+  const runFetch = useCallback(
     async (searchTerm: string, pageNumber: number) => {
       setLoading(true);
       try {
@@ -44,54 +46,39 @@ export function usePaginatedList<T>(
         setItems(res.data);
         setTotal(res.meta.pagination.total);
         setPageCount(res.meta.pagination.pageCount);
+      } catch (err) {
+        setItems([]);
+        setTotal(0);
+        setPageCount(1);
+        onError?.(err);
       } finally {
         setLoading(false);
       }
     },
-    [fetchFn],
+    [fetchFn, onError],
   );
 
+  // Initial load fires immediately; subsequent `search` changes are debounced.
   useEffect(() => {
-    stableFetch('', 1);
-  }, [stableFetch]);
-
-  const mountedRef = useRef(false);
-  useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      return;
-    }
-    const debounceTimer = setTimeout(() => {
+    const delay = search ? SEARCH_DEBOUNCE_MS : 0;
+    const timer = setTimeout(() => {
       setPage(1);
-      stableFetch(search, 1);
-    }, 350);
-    return () => clearTimeout(debounceTimer);
-  }, [search, stableFetch]);
+      runFetch(search, 1);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [search, runFetch]);
 
   const setSearch = useCallback((value: string) => setSearchValue(value), []);
-
-  const clearSearch = useCallback(() => {
-    setSearchValue('');
-    setPage(1);
-    stableFetch('', 1);
-  }, [stableFetch]);
-
-  const submitSearch = useCallback(() => {
-    setPage(1);
-    stableFetch(search, 1);
-  }, [search, stableFetch]);
-
+  const clearSearch = useCallback(() => setSearchValue(''), []);
+  const submitSearch = useCallback(() => runFetch(search, 1), [search, runFetch]);
   const changePage = useCallback(
     (pageNumber: number) => {
       setPage(pageNumber);
-      stableFetch(search, pageNumber);
+      runFetch(search, pageNumber);
     },
-    [search, stableFetch],
+    [search, runFetch],
   );
-
-  const refresh = useCallback(() => {
-    stableFetch(search, page);
-  }, [search, page, stableFetch]);
+  const refresh = useCallback(() => runFetch(search, page), [search, page, runFetch]);
 
   return [
     { items, total, page, pageCount, loading, search },

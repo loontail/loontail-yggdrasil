@@ -1,13 +1,13 @@
-import { Box, Button, Flex, Main, Typography } from '@strapi/design-system';
-import { ArrowClockwise, Plus, Trash } from '@strapi/icons';
+import { Box, Main } from '@strapi/design-system';
 import { useNotification } from '@strapi/strapi/admin';
 import { useCallback, useState } from 'react';
-import { useTheme } from 'styled-components';
 import { texturesApi } from '../../api/texturesApi';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { useTranslate } from '../../hooks/useTranslate';
 import type { PlayerCape, PlayerSkin } from '../../types/entities';
 import AssetTab from './AssetTab';
+import PageHeader from './PageHeader';
+import TabNav from './TabNav';
 import UploadModal from './UploadModal';
 
 const PAGE_SIZE = 100;
@@ -24,7 +24,6 @@ const getServerUrl = (): string => {
 
 const TexturesPage = () => {
   const translate = useTranslate();
-  const theme = useTheme();
   const { toggleNotification } = useNotification();
   const [activeTab, setActiveTab] = useState<'skins' | 'capes'>('skins');
   const [showUpload, setShowUpload] = useState(false);
@@ -45,8 +44,25 @@ const TexturesPage = () => {
     [],
   );
 
-  const [skinsState, skinsActions] = usePaginatedList<PlayerSkin>(fetchSkins, PAGE_SIZE);
-  const [capesState, capesActions] = usePaginatedList<PlayerCape>(fetchCapes, PAGE_SIZE);
+  const handleSkinsError = useCallback(
+    () =>
+      toggleNotification({
+        type: 'warning',
+        message: translate('load.toast.failed.skins'),
+      }),
+    [toggleNotification, translate],
+  );
+  const handleCapesError = useCallback(
+    () =>
+      toggleNotification({
+        type: 'warning',
+        message: translate('load.toast.failed.capes'),
+      }),
+    [toggleNotification, translate],
+  );
+
+  const [skinsState, skinsActions] = usePaginatedList<PlayerSkin>(fetchSkins, handleSkinsError);
+  const [capesState, capesActions] = usePaginatedList<PlayerCape>(fetchCapes, handleCapesError);
 
   const handleValidate = useCallback(async () => {
     setValidating(true);
@@ -90,107 +106,34 @@ const TexturesPage = () => {
     }
   }, [toggleNotification, translate, skinsActions, capesActions]);
 
-  const handleSkinDeleted = useCallback(() => {
+  const handleRefresh = useCallback(() => {
+    setMissingIds(null);
     skinsActions.refresh();
-  }, [skinsActions]);
-  const handleCapeDeleted = useCallback(() => {
     capesActions.refresh();
-  }, [capesActions]);
-  const handleSkinUploaded = useCallback(() => {
-    skinsActions.refresh();
-  }, [skinsActions]);
-  const handleCapeUploaded = useCallback(() => {
-    capesActions.refresh();
-  }, [capesActions]);
+  }, [skinsActions, capesActions]);
+
+  const missingCount = (missingIds?.skins.size ?? 0) + (missingIds?.capes.size ?? 0);
 
   return (
     <Main>
-      {/* ── Header ─────────────────────────────────────────────────── */}
       <Box style={{ padding: `40px ${H_PAD} 32px` }}>
-        <Flex justifyContent="space-between" alignItems="flex-start">
-          <Box>
-            <Typography variant="alpha">{translate('textures.page.title')}</Typography>
-            <Box paddingTop={1}>
-              <Typography variant="epsilon" textColor="neutral500">
-                {translate('textures.page.subtitle', {
-                  skinsTotal: skinsState.total,
-                  capesTotal: capesState.total,
-                })}
-              </Typography>
-            </Box>
-          </Box>
-          <Flex gap={2} style={{ paddingTop: 4 }}>
-            {missingIds && missingIds.skins.size + missingIds.capes.size > 0 && (
-              <Button
-                startIcon={<Trash />}
-                variant="danger"
-                loading={purging}
-                onClick={handlePurgeMissing}
-              >
-                {translate('button.deleteMissing', {
-                  count: missingIds.skins.size + missingIds.capes.size,
-                })}
-              </Button>
-            )}
-            <Button
-              startIcon={<ArrowClockwise />}
-              variant="secondary"
-              loading={validating}
-              onClick={handleValidate}
-            >
-              {translate('button.validate')}
-            </Button>
-            <Button
-              startIcon={<ArrowClockwise />}
-              variant="secondary"
-              onClick={() => {
-                setMissingIds(null);
-                skinsActions.refresh();
-                capesActions.refresh();
-              }}
-            >
-              {translate('button.refresh')}
-            </Button>
-            <Button startIcon={<Plus />} onClick={() => setShowUpload(true)}>
-              {translate('button.upload')}
-            </Button>
-          </Flex>
-        </Flex>
+        <PageHeader
+          skinsTotal={skinsState.total}
+          capesTotal={capesState.total}
+          missingCount={missingCount}
+          validating={validating}
+          purging={purging}
+          onValidate={handleValidate}
+          onPurgeMissing={handlePurgeMissing}
+          onRefresh={handleRefresh}
+          onUpload={() => setShowUpload(true)}
+        />
       </Box>
 
-      {/* ── Tab bar ────────────────────────────────────────────────── */}
       <Box style={{ padding: `0 ${H_PAD}` }}>
-        <Flex gap={1} alignItems="flex-start">
-          {(['skins', 'capes'] as const).map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '10px 20px',
-                  border: `1px solid ${
-                    isActive ? theme.colors.primary600 : theme.colors.neutral200
-                  }`,
-                  borderRadius: 6,
-                  background: isActive ? theme.colors.primary100 : 'transparent',
-                  color: isActive ? theme.colors.primary700 : theme.colors.neutral500,
-                  fontSize: 14,
-                  fontWeight: isActive ? 600 : 400,
-                  cursor: 'pointer',
-                  outline: 'none',
-                  transition: 'color 0.15s, border-color 0.15s, background 0.15s',
-                }}
-              >
-                {tab === 'skins' ? translate('tab.skins') : translate('tab.capes')}
-              </button>
-            );
-          })}
-        </Flex>
+        <TabNav active={activeTab} onChange={setActiveTab} />
       </Box>
 
-      {/* ── Tab content ────────────────────────────────────────────── */}
       {activeTab === 'skins' && (
         <AssetTab
           kind="skin"
@@ -206,7 +149,7 @@ const TexturesPage = () => {
           onSearchClear={skinsActions.clearSearch}
           onSearchSubmit={skinsActions.submitSearch}
           onPageChange={skinsActions.changePage}
-          onDeleted={handleSkinDeleted}
+          onDeleted={skinsActions.refresh}
           onDelete={(id) => texturesApi.deleteSkin(id).then(() => {})}
         />
       )}
@@ -226,15 +169,15 @@ const TexturesPage = () => {
           onSearchClear={capesActions.clearSearch}
           onSearchSubmit={capesActions.submitSearch}
           onPageChange={capesActions.changePage}
-          onDeleted={handleCapeDeleted}
+          onDeleted={capesActions.refresh}
           onDelete={(id) => texturesApi.deleteCape(id).then(() => {})}
         />
       )}
 
       {showUpload && (
         <UploadModal
-          onSkinUploaded={handleSkinUploaded}
-          onCapeUploaded={handleCapeUploaded}
+          onSkinUploaded={skinsActions.refresh}
+          onCapeUploaded={capesActions.refresh}
           onClose={() => setShowUpload(false)}
         />
       )}

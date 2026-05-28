@@ -1,11 +1,6 @@
 import type { ListResponse } from '../types/api';
 import type { PlayerCape, PlayerSkin } from '../types/entities';
 
-/**
- * Strapi v5 admin authentication: the JWT is stored in `sessionStorage`
- * (or `localStorage`, depending on "remember me") under `jwtToken`. The
- * value is JSON-quoted; strip the wrapping quotes when present.
- */
 const getAuthHeader = (): string => {
   const token =
     sessionStorage.getItem('jwtToken') ||
@@ -15,7 +10,7 @@ const getAuthHeader = (): string => {
   return token ? `Bearer ${token.replace(/^"(.*)"$/, '$1')}` : '';
 };
 
-const base = '/admin/api/yggdrasil/textures';
+const base = '/yggdrasil/textures';
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const res = await fetch(`${base}${path}`, {

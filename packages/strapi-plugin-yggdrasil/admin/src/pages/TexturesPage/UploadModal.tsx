@@ -6,11 +6,10 @@ import defaultCapeAsset from '../../assets/default-cape.png';
 import defaultSkinAsset from '../../assets/default-skin.png';
 import SkinViewer3D from '../../components/SkinViewer3D';
 import { useTranslate } from '../../hooks/useTranslate';
-import type { PlayerCape, PlayerSkin } from '../../types/entities';
 
 interface Props {
-  onSkinUploaded: (skin: PlayerSkin) => void;
-  onCapeUploaded: (cape: PlayerCape) => void;
+  onSkinUploaded: () => void;
+  onCapeUploaded: () => void;
   onClose: () => void;
 }
 
@@ -173,12 +172,12 @@ const UploadModal = ({ onSkinUploaded, onCapeUploaded, onClose }: Props) => {
         skinFile
           ? texturesApi
               .uploadSkin(numericUserId, username || undefined, skinFile)
-              .then(onSkinUploaded)
+              .then(() => onSkinUploaded())
           : Promise.resolve(),
         capeFile
           ? texturesApi
               .uploadCape(numericUserId, username || undefined, capeFile)
-              .then(onCapeUploaded)
+              .then(() => onCapeUploaded())
           : Promise.resolve(),
       ]);
       onClose();
@@ -203,7 +202,6 @@ const UploadModal = ({ onSkinUploaded, onCapeUploaded, onClose }: Props) => {
 
         <Modal.Body>
           <Flex gap={8} alignItems="flex-start">
-            {/* ── Form column ───────────────────────────────────────── */}
             <Box style={{ flex: 1, minWidth: 0 }}>
               <Box paddingBottom={4}>
                 <Typography
@@ -271,7 +269,6 @@ const UploadModal = ({ onSkinUploaded, onCapeUploaded, onClose }: Props) => {
               )}
             </Box>
 
-            {/* ── 3D preview column ─────────────────────────────────── */}
             <Box
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
             >
