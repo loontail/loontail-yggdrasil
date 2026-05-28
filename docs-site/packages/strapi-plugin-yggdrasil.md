@@ -55,7 +55,7 @@ routes additionally pass through the `yggdrasil-token-auth` policy.
 
 ### Admin namespace
 
-Under `/admin/api/yggdrasil/textures/*`. Standard Strapi admin JWT.
+Under `/yggdrasil/textures/*`. Standard Strapi admin JWT.
 
 - Skin / cape listing, search, pagination
 - Admin upload on behalf of users

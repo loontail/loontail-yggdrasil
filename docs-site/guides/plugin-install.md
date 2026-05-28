@@ -79,7 +79,7 @@ npm run develop
 
 The plugin runs five bootstrap phases on startup:
 
-1. **`ensureUpUsersUuidColumn`** — adds `up_users.uuid varchar(32)` and a
+1. **`ensureUsersUuidColumn`** — adds `up_users.uuid varchar(32)` and a
    partial unique index. Idempotent.
 2. **`runSkinsRegistryMerge`** — one-shot migration from a legacy
    `skins-registry` plugin. Marker-protected; skips when no legacy data exists.

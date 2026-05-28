@@ -22,7 +22,7 @@
 │    /textures/{:uuid,skin,cape}    GET / PUT / DELETE skin/cape         │
 │                                                                        │
 │  /admin/plugins/yggdrasil/        Texture browser UI                   │
-│  /admin/api/yggdrasil/textures/*  Admin-only texture management        │
+│  /yggdrasil/textures/*  Admin-only texture management        │
 │                                                                        │
 │  Database:                                                             │
 │    up_users (+ uuid column)                                            │
@@ -74,7 +74,7 @@ the client both depend on it for:
 The server side. A Strapi v5 plugin that:
 
 - **Mounts routes** under `/api/yggdrasil/*` (public, content-API namespace) and
-  `/admin/api/yggdrasil/*` (admin JWT-protected).
+  `/yggdrasil/*` (admin JWT-protected).
 - **Owns three tables**: `yggdrasil_tokens`, `yggdrasil_player_skins`,
   `yggdrasil_player_capes`. None are visible in the content manager — they're
   pure infrastructure.

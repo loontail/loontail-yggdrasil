@@ -25,7 +25,7 @@ restricted-import rules.
 
 ```
 src/
-├── constants/           ← endpoint paths, error kind strings, asset dimensions
+├── constants/           ← endpoint paths, asset dimensions
 ├── contracts/           ← Zod schemas for every wire payload
 ├── errors/              ← YggdrasilCoreError, codes, type guards
 ├── helpers/             ← uuid.ts, png.ts, textures-payload.ts
@@ -75,75 +75,93 @@ reads it.
 
 ```
 server/
-├── bootstrap.ts                  ← 5 idempotent boot phases + token cleanup tick
-├── register.ts                   ← appends error-shape middleware before routes load
-├── config.ts                     ← defaults, validator, readConfig helper
-├── types.ts                      ← StrapiInstance / KnexLike / KoaContext shapes
+├── bootstrap.ts                            ← orchestrates startup steps
+├── bootstrap-steps/
+│   ├── ensure-users-uuid-column.ts
+│   ├── ensure-texture-foreign-keys.ts
+│   ├── grant-public-permissions.ts
+│   └── token-cleanup.ts
+├── register.ts                             ← appends error-shape middleware before routes load
+├── config.ts                               ← defaults, validator, readConfig helper
+├── types.ts                                ← StrapiInstance / KnexLike / KoaContext shapes
+│
+├── utils/
+│   ├── strapi-runtime.ts                   ← pluginService<T>(strapi, name)
+│   └── http.ts                             ← parseListQuery, buildPaginationMeta
 │
 ├── controllers/
-│   ├── root.ts                   ← GET /
-│   ├── authserver.ts             ← /authserver/*
-│   ├── sessionserver.ts          ← /sessionserver/*
-│   ├── api.ts                    ← /api/profiles/minecraft
-│   ├── textures.ts               ← /textures/* (public reads + token-protected writes)
-│   ├── textures-admin.ts         ← /admin/api/yggdrasil/textures/* (admin namespace)
-│   └── helpers.ts                ← pluginService(), parseOrThrow(), YggdrasilHttpError
+│   ├── root.ts                             ← GET /
+│   ├── authserver.ts                       ← /authserver/*
+│   ├── sessionserver.ts                    ← /sessionserver/*
+│   ├── api.ts                              ← /api/profiles/minecraft
+│   ├── textures.ts                         ← /textures/* (public reads + self-service)
+│   ├── textures-admin.ts                   ← /yggdrasil/textures/* (admin namespace)
+│   ├── textures-helpers.ts                 ← persistAsset, validatePngOrThrow, parseVariant
+│   └── helpers.ts                          ← parseOrThrow, YggdrasilHttpError, re-exports pluginService
 │
 ├── routes/
 │   ├── root.routes.ts
 │   ├── authserver.routes.ts
 │   ├── sessionserver.routes.ts
 │   ├── api.routes.ts
-│   ├── textures.routes.ts        ← content-api namespace
-│   ├── textures-admin.routes.ts  ← admin namespace
-│   └── index.ts                  ← combines both namespaces
+│   ├── textures.routes.ts                  ← content-api namespace
+│   ├── textures-admin.routes.ts            ← admin namespace
+│   └── index.ts                            ← combines both namespaces
 │
 ├── services/
-│   ├── crypto.ts                 ← RSA key generation, loading, SHA1withRSA signing
-│   ├── tokens.ts                 ← issue / validate / refresh / invalidate / cleanupExpired
-│   ├── users.ts                  ← findByUuid, findByIdentifier, ensureUuid
-│   ├── passwords.ts              ← thin wrapper around users-permissions.user.validatePassword
-│   ├── storage.ts                ← file I/O + revision-tagged filename builder
-│   ├── textures-store.ts         ← yggdrasil_player_{skins,capes} CRUD + pagination
-│   ├── textures.ts               ← buildTexturesProperty (signs and absolutises URL)
-│   ├── join-sessions.ts          ← memory backend (db backend stubbed)
-│   └── index.ts                  ← factory exports
+│   ├── crypto.ts                           ← RSA key generation, loading, SHA1withRSA signing
+│   ├── tokens.ts                           ← issue / validate / refresh / invalidate / cleanupExpired
+│   ├── users.ts                            ← findByUuid, findByIdentifier, ensureUuid
+│   ├── passwords.ts                        ← thin wrapper around users-permissions.user.validatePassword
+│   ├── storage.ts                          ← init, file I/O, revision-tagged filename builder
+│   ├── textures-store.ts                   ← yggdrasil_player_{skins,capes} CRUD (kind-parameterised)
+│   ├── textures-property.ts                ← build(user) → signed GameProfileProperty
+│   ├── join-sessions.ts                    ← memory backend (db backend stubbed)
+│   └── index.ts                            ← factory exports
 │
 ├── content-types/
-│   ├── token/schema.json         ← yggdrasil_tokens
-│   ├── player-skin/schema.json   ← yggdrasil_player_skins
-│   └── player-cape/schema.json   ← yggdrasil_player_capes
+│   ├── token/schema.json                   ← yggdrasil_tokens
+│   ├── player-skin/schema.json             ← yggdrasil_player_skins
+│   └── player-cape/schema.json             ← yggdrasil_player_capes
 │
 ├── policies/
-│   └── yggdrasil-token-auth.ts   ← Bearer-token extraction + validation
+│   └── yggdrasil-token-auth.ts             ← Bearer-token extraction + validation
 │
 ├── middlewares/
-│   └── error-shape.ts            ← wraps errors into Yggdrasil envelopes
+│   └── error-shape.ts                      ← wraps errors into Yggdrasil envelopes
 │
 ├── migrations/
-│   └── skins-registry-merge.ts   ← one-shot legacy-data migration
+│   └── skins-registry-merge.ts             ← one-shot legacy-data migration
 │
-└── index.ts                      ← plugin definition object
+└── index.ts                                ← plugin definition object
 
 admin/
 └── src/
-    ├── index.ts                  ← plugin registration in Strapi admin UI
-    ├── pluginId.ts               ← 'yggdrasil'
+    ├── index.ts                            ← plugin registration in Strapi admin UI
+    ├── pluginId.ts                         ← 'yggdrasil'
     ├── pages/
-    │   ├── App/                  ← root navigation, tabs
-    │   ├── TexturesPage/         ← skin / cape browser, upload, detail modal
-    │   └── SessionsPage/         ← placeholder
+    │   ├── App/                            ← root navigation, tabs
+    │   ├── TexturesPage/
+    │   │   ├── index.tsx                   ← page composition + state
+    │   │   ├── PageHeader.tsx              ← title, subtitle, action buttons
+    │   │   ├── TabNav.tsx                  ← Skins / Capes switcher
+    │   │   ├── AssetTab.tsx                ← list body (generic on kind)
+    │   │   ├── SkinCard.tsx                ← grid card
+    │   │   ├── SkinDetailModal.tsx         ← full-detail modal with skinview3d
+    │   │   ├── UploadModal.tsx             ← admin upload form
+    │   │   └── Paginator.tsx
+    │   └── SessionsPage/                   ← placeholder
     ├── components/
-    │   ├── PluginIcon/           ← sidebar icon
-    │   ├── SkinViewer3D/         ← skinview3d wrapper
-    │   └── SkinPreview2D/        ← static PNG preview
-    ├── hooks/                    ← usePaginatedList, useTranslate
-    ├── api/texturesApi.ts        ← fetch calls to /admin/api/yggdrasil/textures/*
-    ├── types/                    ← API response types
-    └── translations/             ← i18n JSON
+    │   ├── PluginIcon/                     ← sidebar icon
+    │   ├── SkinViewer3D/                   ← skinview3d wrapper
+    │   └── SkinPreview2D/                  ← static PNG preview
+    ├── hooks/                              ← usePaginatedList, useTranslate
+    ├── api/texturesApi.ts                  ← fetch calls to /yggdrasil/textures/*
+    ├── types/                              ← API response types
+    └── translations/                       ← i18n JSON
 
-loader.js                          ← CommonJS bootstrap: requires dist/server, unwraps .default
-strapi-server.ts                   ← stub TS entry for source-tree resolution
+loader.js                                    ← CommonJS bootstrap: requires dist/server, unwraps .default
+strapi-server.ts                             ← stub TS entry for source-tree resolution
 ```
 
 ### Allowed dependency direction
@@ -158,14 +176,15 @@ server/controllers/*, routes/*
   ↓
 server/services/*                            ← cross-imports allowed within services/
   ↓
-server/types.ts, server/policies/, server/middlewares/
+server/utils/*, server/types.ts, server/policies/, server/middlewares/
 @loontail/yggdrasil-core                     ← shape validation, signing helpers, PNG
 @loontail/minecraft-kit                      ← detectMojangSkinVariant for legacy rows
 ```
 
-Admin (`admin/src/`) and server (`server/`) never import from each other.
-Shared types live in their own `shared/` directory if and when they exist.
-Today both sides hand-write what they need.
+`server/utils/` is leaf code — its only imports are `server/types.ts` and
+node built-ins. Both controllers and services import from `utils/`.
+Services never import from controllers. Admin (`admin/src/`) and server
+(`server/`) never import from each other.
 
 ### Plugin definition
 
@@ -178,9 +197,9 @@ export default {
   destroy,
   config,         // { default, validator }
   contentTypes,   // { token, playerSkin, playerCape }
-  controllers,    // { root, authserver, sessionserver, api, textures, texturesAdmin }
+  controllers,    // { root, authserver, sessionserver, api, textures, 'textures-admin' }
   routes,         // { 'content-api', admin }
-  services,       // { crypto, tokens, users, passwords, storage, texturesStore, textures, joinSessions }
+  services,       // { crypto, tokens, users, passwords, storage, 'textures-store', 'textures-property', 'join-sessions' }
   middlewares,    // { 'error-shape' }
   policies,       // { 'yggdrasil-token-auth' }
 };
@@ -201,12 +220,15 @@ the TypeScript default export.
   live on disk under `public/yggdrasil/`. No fourth state primitive.
 - **Crypto is one service.** `services/crypto.ts` is the only consumer of
   the private key. Controllers that need a signed property call
-  `services.textures.buildTexturesProperty()` which calls
+  `services.textures-property.build()` which calls
   `services.crypto.signBase64()`.
-- **One file per route group.** A new endpoint adds a route to
-  `routes/<group>.routes.ts`, a handler to `controllers/<group>.ts`, and
-  optionally a service method. The boilerplate stops at three files per
-  endpoint.
+- **Skin/cape twins collapse on `kind`.** `textures-store` exposes
+  `findByUserId(kind, ...)` / `upsert(kind, ...)` / etc. instead of two
+  near-identical methods. The same `AssetKind` discriminator threads
+  through the controllers via `textures-helpers.persistAsset`.
+- **Bootstrap is a flat list.** `bootstrap.ts` is purely orchestration —
+  each step is its own file under `bootstrap-steps/`. Adding a step is
+  one new file plus one line in the orchestrator.
 - **Bootstrap phases are idempotent.** Every phase can run multiple times
   without effect; partial failures don't require a special recovery path.
 - **No silent catches.** Empty `catch { }` blocks need a one-line comment

@@ -33,19 +33,19 @@ list active join sessions.
 ## REST surface
 
 The admin UI is backed by an admin-only REST namespace under
-`/admin/api/yggdrasil/textures/*`. You can hit it directly with an admin JWT if
+`/yggdrasil/textures/*`. You can hit it directly with an admin JWT if
 you want to script texture management.
 
 | Method | Path | Body / query | Purpose |
 |---|---|---|---|
-| `GET` | `/admin/api/yggdrasil/textures/skins` | `?page=1&pageSize=25&search=…` | Paginated skins list. |
-| `GET` | `/admin/api/yggdrasil/textures/capes` | `?page=1&pageSize=25&search=…` | Paginated capes list. |
-| `POST` | `/admin/api/yggdrasil/textures/upload/skin` | `{ userId, fileBase64, variant?, username? }` | Upload on behalf of a user. |
-| `POST` | `/admin/api/yggdrasil/textures/upload/cape` | `{ userId, fileBase64, username? }` | Upload on behalf of a user. |
-| `DELETE` | `/admin/api/yggdrasil/textures/skins/:id` | — | Delete by row id. |
-| `DELETE` | `/admin/api/yggdrasil/textures/capes/:id` | — | Delete by row id. |
-| `POST` | `/admin/api/yggdrasil/textures/validate` | — | Returns `{ missingSkins: [id…], missingCapes: [id…] }`. |
-| `POST` | `/admin/api/yggdrasil/textures/purge-missing` | — | Deletes rows whose files are missing; returns counts. |
+| `GET` | `/yggdrasil/textures/skins` | `?page=1&pageSize=25&search=…` | Paginated skins list. |
+| `GET` | `/yggdrasil/textures/capes` | `?page=1&pageSize=25&search=…` | Paginated capes list. |
+| `POST` | `/yggdrasil/textures/upload/skin` | `{ userId, fileBase64, variant?, username? }` | Upload on behalf of a user. |
+| `POST` | `/yggdrasil/textures/upload/cape` | `{ userId, fileBase64, username? }` | Upload on behalf of a user. |
+| `DELETE` | `/yggdrasil/textures/skins/:id` | — | Delete by row id. |
+| `DELETE` | `/yggdrasil/textures/capes/:id` | — | Delete by row id. |
+| `POST` | `/yggdrasil/textures/validate` | — | Returns `{ missingSkins: [id…], missingCapes: [id…] }`. |
+| `POST` | `/yggdrasil/textures/purge-missing` | — | Deletes rows whose files are missing; returns counts. |
 
 The `search` query is a `LIKE %…%` over `username` plus the formatted UUID. It's
 case-insensitive on Postgres / MySQL, case-sensitive on SQLite (the engine's
@@ -75,10 +75,10 @@ mutated.
 **Purge missing** then deletes those rows. The next upload from the same user
 recreates them cleanly.
 
-There is no orphan-file finder in the admin UI today — listing files on disk
-that don't match a DB row is a manual job. The plugin's `services/textures.ts`
-exposes the `findOrphans` helper you can reach from a custom controller if you
-need it.
+There is no orphan-file finder in the admin UI today — listing files on
+disk that don't match a DB row is a manual job. The matching direction
+(DB rows whose files are missing) is exposed via the `validate` /
+`purge-missing` endpoints above and via `services.textures-store.findMissing`.
 
 ## i18n
 

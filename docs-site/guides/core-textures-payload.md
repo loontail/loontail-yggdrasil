@@ -147,7 +147,7 @@ import {
   encodeTexturesPayloadBase64,
 } from '@loontail/yggdrasil-core';
 
-function buildTexturesProperty(user, skin, cape, sign) {
+function buildSignedTexturesProperty(user, skin, cape, sign) {
   const payload = buildTexturesPayload({
     profileId: user.uuid,
     profileName: user.username,
@@ -168,7 +168,7 @@ function buildTexturesProperty(user, skin, cape, sign) {
 }
 ```
 
-The plugin's `services/textures.ts` is structurally identical to this — it
+The plugin's `services/textures-property.ts` is structurally identical to this — it
 relies on the core helpers entirely so any tweak to the payload format flows
 through one place.
 

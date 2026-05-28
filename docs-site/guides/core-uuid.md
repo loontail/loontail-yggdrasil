@@ -26,9 +26,6 @@ import {
   randomUndashedUuid,
   // Branded constructors (compile-time only, no validation)
   asPlayerUuid,
-  asAccessToken,
-  asClientToken,
-  asServerId,
   // Type
   type PlayerUuid,
 } from '@loontail/yggdrasil-core';
@@ -89,8 +86,7 @@ type ServerId      = string & { readonly __brand: 'ServerId' };
 
 These are compile-time only — no runtime cost. They prevent passing a
 ClientToken where a PlayerUuid is expected (TypeScript flags the mismatch).
-The brand constructors (`asPlayerUuid`, `asAccessToken`, …) are pure type
-assertions:
+`PlayerUuid` ships with a runtime-free cast helper:
 
 ```ts
 function asPlayerUuid(value: string): PlayerUuid {
@@ -98,8 +94,10 @@ function asPlayerUuid(value: string): PlayerUuid {
 }
 ```
 
-They don't validate. Use them after you've validated through `undashUuid` or
-equivalent. The pattern in the codebase:
+It doesn't validate — use after `undashUuid` or equivalent has run. The
+other brands (`AccessToken`, `ClientToken`, `ServerId`) are type-only; cast
+with a plain `as AccessToken` at the boundary where the string is verified.
+The pattern in the codebase:
 
 ```ts
 function load(rawUuid: string): PlayerUuid {

@@ -1,7 +1,7 @@
 # Endpoints
 
 Every HTTP route the plugin mounts. All public routes live under
-`/api/yggdrasil/*`; the admin routes live under `/admin/api/yggdrasil/*` and
+`/api/yggdrasil/*`; the admin routes live under `/yggdrasil/*` and
 require an admin JWT.
 
 ## Public Yggdrasil endpoints
@@ -60,19 +60,19 @@ All require `Authorization: Bearer <accessToken>` validated by the
 
 ## Admin endpoints
 
-Mounted under `/admin/api/yggdrasil/*`. Authentication is Strapi's admin JWT
+Mounted under `/yggdrasil/*`. Authentication is Strapi's admin JWT
 — there are no per-route policies beyond Strapi's default admin guard.
 
 | Method | Path | Body / params | Returns |
 |---|---|---|---|
-| `GET` | `/admin/api/yggdrasil/textures/skins` | `?page&pageSize&search` | `{ data: SkinRow[], meta: { pagination } }` |
-| `GET` | `/admin/api/yggdrasil/textures/capes` | `?page&pageSize&search` | `{ data: CapeRow[], meta: { pagination } }` |
-| `POST` | `/admin/api/yggdrasil/textures/upload/skin` | `{ userId, fileBase64, variant?, username? }` | The created skin row. |
-| `POST` | `/admin/api/yggdrasil/textures/upload/cape` | `{ userId, fileBase64, username? }` | The created cape row. |
-| `DELETE` | `/admin/api/yggdrasil/textures/skins/:id` | — | `{ success: true }` |
-| `DELETE` | `/admin/api/yggdrasil/textures/capes/:id` | — | `{ success: true }` |
-| `POST` | `/admin/api/yggdrasil/textures/validate` | — | `{ missingSkins: number[], missingCapes: number[] }` |
-| `POST` | `/admin/api/yggdrasil/textures/purge-missing` | — | `{ deletedSkins: number, deletedCapes: number }` |
+| `GET` | `/yggdrasil/textures/skins` | `?page&pageSize&search` | `{ data: SkinRow[], meta: { pagination } }` |
+| `GET` | `/yggdrasil/textures/capes` | `?page&pageSize&search` | `{ data: CapeRow[], meta: { pagination } }` |
+| `POST` | `/yggdrasil/textures/upload/skin` | `{ userId, fileBase64, variant?, username? }` | The created skin row. |
+| `POST` | `/yggdrasil/textures/upload/cape` | `{ userId, fileBase64, username? }` | The created cape row. |
+| `DELETE` | `/yggdrasil/textures/skins/:id` | — | `{ success: true }` |
+| `DELETE` | `/yggdrasil/textures/capes/:id` | — | `{ success: true }` |
+| `POST` | `/yggdrasil/textures/validate` | — | `{ missingSkins: number[], missingCapes: number[] }` |
+| `POST` | `/yggdrasil/textures/purge-missing` | — | `{ deletedSkins: number, deletedCapes: number }` |
 
 ## Status codes
 

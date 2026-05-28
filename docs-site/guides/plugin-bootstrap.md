@@ -1,8 +1,9 @@
 # Bootstrap & migrations
 
-`server/bootstrap.ts` runs every time Strapi starts. It executes five idempotent
-phases sequentially. Each one is safe to re-run, so a partial failure on phase N
-can be fixed and the server restarted without manual cleanup.
+`server/bootstrap.ts` runs every time Strapi starts. It orchestrates a
+sequence of idempotent steps from `server/bootstrap-steps/` — each one is
+safe to re-run, so a partial failure on step N can be fixed and the server
+restarted without manual cleanup.
 
 ```
 strapi.start()
@@ -10,16 +11,17 @@ strapi.start()
    ▼
 plugin::yggdrasil bootstrap
    │
-   ├── 1. ensureUpUsersUuidColumn
+   ├── 1. ensureUsersUuidColumn
    ├── 2. runSkinsRegistryMerge          (skipped if marker present or no legacy data)
    ├── 3. ensureTextureForeignKeys
    ├── 4. grantPublicPermissions
    ├── 5. crypto.init                     (load or generate active.key.pem)
+   ├── 6. storage.init                    (mkdir public/yggdrasil/textures/{skins,capes})
    ▼
 plugin starts serving + token cleanup tick begins (1-hour interval)
 ```
 
-## 1. `ensureUpUsersUuidColumn`
+## 1. `ensureUsersUuidColumn`
 
 Adds a single `uuid varchar(32)` column to the `up_users` table, plus a partial
 unique index:
@@ -127,37 +129,37 @@ controllers that need to sign the `textures` property.
 
 ## Token cleanup tick
 
-After the five bootstrap phases, `bootstrap.ts` schedules a recurring task:
+After the bootstrap phases, `startTokenCleanup` (from
+`bootstrap-steps/token-cleanup.ts`) schedules a recurring task:
 
 ```ts
-const intervalId = setInterval(
-  () => services.tokens.cleanupExpired().catch(logErr),
-  60 * 60 * 1000,
-);
-strapi.cron.add('yggdrasil-token-cleanup', () => intervalId); // not exactly; pseudo
+const interval = setInterval(tick, 60 * 60 * 1000);
+interval.unref?.();
 ```
 
-`cleanupExpired` runs:
+`tick` calls `services.tokens.cleanupExpired()`, which runs the equivalent of:
 
 ```sql
 DELETE FROM yggdrasil_tokens WHERE expiresAt <= NOW();
 ```
 
-The interval ID is stored on the strapi instance so the `destroy` hook can
-clear it cleanly on hot reload and graceful shutdown.
+The returned `{ stop() }` handle is stored in a per-`strapi` `WeakMap` so
+the `destroy` hook can stop it on hot reload and graceful shutdown without
+leaking timers across reloads.
 
 ## `destroy` hook
 
 ```ts
 async destroy({ strapi }) {
-  clearInterval(strapi.yggdrasilTokenCleanupInterval);
-  await services.joinSessions.dispose();
+  runtimeHandles.get(strapi)?.stop();
+  runtimeHandles.delete(strapi);
+  services.joinSessions.dispose();
 }
 ```
 
-Runs on hot reload (Strapi dev mode) and on graceful shutdown. Required to
-prevent leaked timers — Strapi's reload model otherwise stacks intervals across
-reloads.
+Runs on hot reload (Strapi dev mode) and on graceful shutdown. Strapi's
+reload model otherwise stacks intervals across reloads, so stopping the
+cleanup tick is mandatory.
 
 ## What can go wrong
 

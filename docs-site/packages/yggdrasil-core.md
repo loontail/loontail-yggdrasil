@@ -21,9 +21,6 @@ import {
   dashUuid,
   randomUndashedUuid,
   asPlayerUuid,
-  asAccessToken,
-  asClientToken,
-  asServerId,
 
   validatePngBuffer,
   assertPngBuffer,

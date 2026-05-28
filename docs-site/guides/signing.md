@@ -42,7 +42,7 @@ You can also point `privateKeyPath` at a path outside the Strapi project root
 
 Every endpoint that returns a signed profile (`hasJoined`, the `profile/:uuid`
 default-signed mode, `bulkProfiles` is *unsigned* by spec) goes through
-`services/textures.ts#buildTexturesProperty`:
+`services/textures-property.ts#build`:
 
 ```ts
 const payload = buildTexturesPayload({

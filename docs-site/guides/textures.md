@@ -145,7 +145,7 @@ the host application's responsibility. Postgres / MySQL get the cascade.
 ## Admin-side upload
 
 Operators can upload on behalf of a user from
-`/admin/plugins/yggdrasil/textures`. The endpoint is `POST /admin/api/yggdrasil/textures/upload/skin`
+`/admin/plugins/yggdrasil/textures`. The endpoint is `POST /yggdrasil/textures/upload/skin`
 with a JSON body `{ userId, fileBase64, variant?, username? }`. The admin JWT
 guards it (same as every other admin route). Internally the controller calls
 the same store + validate path as the user-facing upload.
@@ -171,6 +171,6 @@ drift (a restore from different timestamps, a wiped volume, …):
 - And **Purge missing** — deletes those rows so the next upload can recreate
   them cleanly.
 
-Both surfaces are also available as REST: `POST /admin/api/yggdrasil/textures/validate`
-returns `{ missingSkins: [id…], missingCapes: [id…] }`; `POST /admin/api/yggdrasil/textures/purge-missing`
+Both surfaces are also available as REST: `POST /yggdrasil/textures/validate`
+returns `{ missingSkins: [id…], missingCapes: [id…] }`; `POST /yggdrasil/textures/purge-missing`
 deletes them and returns counts.

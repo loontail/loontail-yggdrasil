@@ -25,11 +25,10 @@ type guards `isYggdrasilCoreError` / `isYggdrasilCoreErrorCode`. Codes:
 
 ### `src/helpers/uuid.ts`
 UUID detection, conversion, and generation: `isUuidUndashed`, `isUuidDashed`,
-`undashUuid`, `dashUuid`, `randomUndashedUuid`, branded constructors
-(`asPlayerUuid`, `asAccessToken`, `asClientToken`, `asServerId`). Generation
-uses `globalThis.crypto.randomUUID()` so it works in Node 19+, modern
-browsers, and Deno. Throws `YggdrasilCoreError('invalid_uuid')` with the
-input in `context.value` on shape mismatch.
+`undashUuid`, `dashUuid`, `randomUndashedUuid`. Generation uses
+`globalThis.crypto.randomUUID()` so it works in Node 19+, modern browsers,
+and Deno. Throws `YggdrasilCoreError('invalid_uuid')` with the input in
+`context.value` on shape mismatch.
 
 ### `src/helpers/png.ts`
 Byte-level PNG validation. `validatePngBuffer(buffer, kind)` returns a
@@ -47,10 +46,11 @@ plugin signs `encodeTexturesPayloadBase64`'s output and ships it inside a
 `GameProfile.properties[0]`.
 
 ### `src/types/*`
-Domain types: `branded.ts` (compile-time string brands), `agent.ts`,
-`error.ts`, `meta.ts`, `profile.ts`, `session.ts`, `textures.ts`. Types
-that map 1:1 to a Zod schema live next to the schema in `contracts/` and
-are derived via `z.infer<typeof Schema>`.
+Domain types: `branded.ts` (compile-time string brands `PlayerUuid`,
+`AccessToken`, `ClientToken`, `ServerId` plus the runtime-free
+`asPlayerUuid` cast), `agent.ts`, `error.ts`, `meta.ts`, `profile.ts`,
+`session.ts`, `textures.ts`. Types that map 1:1 to a Zod schema live next to
+the schema in `contracts/` and are derived via `z.infer<typeof Schema>`.
 
 ## `@loontail/yggdrasil-client`
 
@@ -119,10 +119,17 @@ Plugin definition object: `register`, `bootstrap`, `destroy`, `config`,
 `policies`. This is what Strapi reads.
 
 ### `server/bootstrap.ts`
-Runs five idempotent boot phases (uuid column, skins-registry merge,
-texture FKs, public permissions, crypto init), then starts the hourly
-token cleanup tick. Sets `strapi.yggdrasilTokenCleanupInterval` so
-`destroy` can clear it on hot reload.
+Orchestrates startup: calls each `bootstrap-steps/*` function in order
+(uuid column, skins-registry merge, texture FKs, public permissions,
+`crypto.init`, `storage.init`), then starts the hourly token-cleanup tick.
+The cleanup handle is stored in a per-strapi `WeakMap` so `destroy` can stop
+it on hot reload / graceful shutdown.
+
+### `server/bootstrap-steps/`
+One file per idempotent startup action: `ensure-users-uuid-column.ts`,
+`ensure-texture-foreign-keys.ts`, `grant-public-permissions.ts`,
+`token-cleanup.ts`. Each file is self-contained — own constants, own helper
+functions. `bootstrap.ts` imports and orchestrates.
 
 ### `server/register.ts`
 Appends the `plugin::yggdrasil.error-shape` middleware to the global chain
@@ -140,6 +147,15 @@ isn't `'memory' | 'db'`. `readConfig` derives `skinDomains` from
 Minimal-surface types for the Strapi instance, Knex, and Koa contexts. Avoids
 a direct `@strapi/types` dependency so the plugin doesn't break on every
 Strapi version bump. Loose enough that mocks in tests work.
+
+### `server/utils/strapi-runtime.ts`
+`pluginService<T>(strapi, name)` — typed accessor for the plugin's own
+services. Used by every controller and the textures-property service.
+
+### `server/utils/http.ts`
+`parseListQuery(ctx)` (reads `page`, `pageSize`, `search` query params with
+defaults) and `buildPaginationMeta(total, page, pageSize)` (returns the
+`meta.pagination` envelope). Shared by every paginated admin endpoint.
 
 ### `server/controllers/root.ts`
 `GET /` — returns `YggdrasilMeta` (server name, skin domains, signature
@@ -161,22 +177,31 @@ by uuid, signed or unsigned based on `?unsigned`).
 Names not found are omitted (Mojang behaviour).
 
 ### `server/controllers/textures.ts`
-Public reads (`getTextures`) and token-protected writes (`uploadSkin`,
-`uploadCape`, `deleteSkin`, `deleteCape`). Uploads run `assertPngBuffer`,
-detect variant via minecraft-kit for legacy rows, and call
-`services.texturesStore.upsert*`. Owner is identified from
-`ctx.state.yggdrasilUser`, set by the `yggdrasil-token-auth` policy.
+Public reads (`getTextures`) and token-protected self-service writes
+(`uploadSkin`, `uploadCape`, `deleteSkin`, `deleteCape`). Owner is
+identified from `ctx.state.yggdrasilUser`, set by the
+`yggdrasil-token-auth` policy. Shared upload/persist logic lives in
+`textures-helpers.ts`.
 
 ### `server/controllers/textures-admin.ts`
-Admin namespace controllers: list (paginated, searchable), upload on
-behalf of a user, delete by row id, validate (find rows with missing
-files), purge-missing.
+Admin-only controllers backing `/yggdrasil/textures/*` (Strapi v5 admin
+namespace): paginated `listSkins` / `listCapes`, on-behalf-of `uploadSkin` /
+`uploadCape` (base64 body), `deleteSkin` / `deleteCape` by row id, plus
+`validate` (find DB rows whose files are missing) and `purgeMissing`
+(delete those rows).
+
+### `server/controllers/textures-helpers.ts`
+Shared between `textures.ts` and `textures-admin.ts`: `MAX_UPLOAD_BYTES`
+(256 KB cap), `parseVariant`, `validatePngOrThrow` (wraps
+`assertPngBuffer` into a `YggdrasilHttpError`), and `persistAsset` — the
+single function that writes the file, upserts the DB row, and deletes the
+previous file if any.
 
 ### `server/controllers/helpers.ts`
-`pluginService(strapi, name)` (typed accessor), `parseOrThrow(schema, value, errorKind?)`
-(boundary validator that throws `YggdrasilHttpError`), `YggdrasilHttpError`
-class (caught by the error-shape middleware to produce the Yggdrasil
-envelope).
+`parseOrThrow(ctx, schema, input)` (boundary validator that throws
+`YggdrasilHttpError`), `YggdrasilHttpError` class (caught by the
+error-shape middleware to produce the Yggdrasil envelope), and a
+re-export of `pluginService` from `utils/strapi-runtime`.
 
 ### `server/routes/*.routes.ts`
 Strapi route definitions, one file per controller group. Each route lists
@@ -188,7 +213,7 @@ namespaces — `content-api` (public Yggdrasil) and `admin`.
 Single owner of the private key. `init()` loads or generates the RSA-4096
 keypair and reads archived public keys from the archive directory.
 `signBase64(payload)` signs via SHA1withRSA / PKCS#1 v1.5 (Mojang-compatible).
-`activePublicPem()` / `allPublicPems()` are read by the root controller.
+`publicKeyPem()` / `allPublicKeyPems()` are read by the root controller.
 
 ### `server/services/tokens.ts`
 `issue(userId, clientToken?)` (with FIFO per-user cap eviction), `validate`,
@@ -196,29 +221,32 @@ keypair and reads archived public keys from the archive directory.
 64-char hex. The cleanup loop runs hourly from bootstrap.
 
 ### `server/services/users.ts`
-`findByUuid`, `findById`, `findByIdentifier` (username or email — flips
-based on `users-permissions.feature.non_email_login`), `ensureUuid`
-(lazy assignment on first authentication).
+`findByUuid`, `findById`, `findByIdentifier` (username or email),
+`findByIdentifierWithPassword`, `ensureUuid` (lazy assignment on first
+authentication).
 
 ### `server/services/passwords.ts`
 Thin wrapper around `users-permissions.plugin.user.validatePassword`.
 Exists as a separate service so tests can stub it.
 
 ### `server/services/storage.ts`
+`init()` (creates the texture directories — called from bootstrap),
 `buildFilename(uuid)` (`${uuid}-${randomBytes(6).toString('hex')}.png`),
-`write(kind, filename, buffer)`, `deleteIfExists(path)`, `publicUrlFor(kind, filename)`.
+`diskPath(kind, filename)`, `publicUrl(kind, filename)`, `write`,
+`deleteIfExists`, `exists`. No DB access — that's the textures-store's job.
 
 ### `server/services/textures-store.ts`
-`findSkinByUserId`, `findCapeByUserId`, `upsertSkin`, `upsertCape`,
-`deleteSkin`, `deleteCape`, plus `listSkins(page, pageSize, search)` /
-`listCapes(...)` for the admin UI. Combines the file-system call with the
-DB row update in a single method so the invariant "file ↔ row" doesn't
-drift.
+CRUD for `yggdrasil_player_skins` / `yggdrasil_player_capes`. One
+`AssetKind = 'skin' | 'cape'` parameter switches between the two tables
+across `findByUserId`, `findById`, `upsert`, `deleteByUserId`,
+`deleteById`, `findMany` (paginated + searchable), and `findMissing`
+(batch scanner for orphan rows whose files are gone).
 
-### `server/services/textures.ts`
-`buildTexturesProperty(user, skin, cape)` — builds the textures payload via
-core, absolutises URLs against `publicUrl`, signs via crypto, returns the
-`GameProfileProperty` ready to put into `GameProfile.properties[]`.
+### `server/services/textures-property.ts`
+`build(user, { signed })` — composes core's `buildTexturesPayload` and
+`encodeTexturesPayloadBase64`, absolutises URLs against `publicUrl`, signs
+via the crypto service, returns the `GameProfileProperty` ready to put into
+`GameProfile.properties[]`.
 
 ### `server/services/join-sessions.ts`
 In-memory backend for `/sessionserver/session/minecraft/join`. `put`,
@@ -226,16 +254,14 @@ In-memory backend for `/sessionserver/session/minecraft/join`. `put`,
 reserved; today it routes to memory.
 
 ### `server/policies/yggdrasil-token-auth.ts`
-Extracts `Authorization: Bearer <token>` (also accepts `?accessToken=…` for
-some clients), validates against `yggdrasil_tokens`, attaches the loaded
-user to `ctx.state.yggdrasilUser`. Returns 401 + Yggdrasil envelope on
-missing / malformed header; returns 403 + envelope on expired / invalid
-token.
+Extracts `Authorization: Bearer <token>`, validates it against
+`yggdrasil_tokens`, attaches the loaded user to `ctx.state.yggdrasilUser`.
+Returns 401 + Yggdrasil envelope on missing / malformed header or
+expired / invalid token.
 
 ### `server/middlewares/error-shape.ts`
-Global Koa middleware that catches `YggdrasilHttpError` (and bare Zod
-errors) and rewrites the response into a Yggdrasil envelope
-(`{ error, errorMessage, cause? }`).
+Global Koa middleware that catches `YggdrasilHttpError` and rewrites the
+response into a Yggdrasil envelope (`{ error, errorMessage, cause? }`).
 
 ### `server/migrations/skins-registry-merge.ts`
 One-shot migration from the legacy `skins-registry` plugin. Marker-guarded
@@ -256,17 +282,61 @@ Strapi admin registration: side-menu link with `PluginIcon`, lazy-loaded
 Tab nav between Textures and Sessions. Routes `/plugins/yggdrasil/textures`
 and `/plugins/yggdrasil/sessions`.
 
-### `admin/src/pages/TexturesPage/*`
-Tabbed Skins / Capes browser. `AssetTab.tsx` toggles list / upload mode.
-`SkinCard.tsx` is the grid card. `SkinDetailModal.tsx` is the full-detail
-modal with `SkinViewer3D`. `UploadModal.tsx` is the admin upload form.
-`Paginator.tsx` is the page navigation control.
+### `admin/src/pages/TexturesPage/index.tsx`
+Owns the page state (active tab, validating/purging flags, missingIds
+result). Composes `PageHeader`, `TabNav`, `AssetTab`, and the
+`UploadModal`. Wires `usePaginatedList` to `texturesApi.listSkins` /
+`listCapes` and surfaces fetch failures as warning toasts.
+
+### `admin/src/pages/TexturesPage/PageHeader.tsx`
+Presentational header: title, subtitle (`{skinsTotal} skins · {capesTotal}
+capes`), and the action buttons (Validate, Refresh, Upload, plus the
+conditional "Delete missing" button when `missingCount > 0`).
+
+### `admin/src/pages/TexturesPage/TabNav.tsx`
+Skins / Capes tab switcher. Plain `<button>` styled inline because Strapi's
+`Tabs` component is overkill for two items.
+
+### `admin/src/pages/TexturesPage/AssetTab.tsx`
+List body shared between the Skins and Capes tabs. Generic over
+`kind: 'skin' | 'cape'`. Renders the grid of `SkinCard`s, the search input,
+and `Paginator`. Routes per-card delete and detail-modal events back up
+to the parent.
+
+### `admin/src/pages/TexturesPage/SkinCard.tsx`
+Grid card: username, file size, variant (skins only), thumbnail. Opens
+`SkinDetailModal` on click.
+
+### `admin/src/pages/TexturesPage/SkinDetailModal.tsx`
+Full-detail modal with the `skinview3d` preview, file URL, and a delete
+button.
+
+### `admin/src/pages/TexturesPage/UploadModal.tsx`
+Admin upload form. Pick userId, optional username, drop in a PNG (with
+inline `DropZone`), submit. Shows a side-by-side 3D preview via
+`SkinViewer3D`.
+
+### `admin/src/pages/TexturesPage/Paginator.tsx`
+Page navigation control (prev / page n / next).
 
 ### `admin/src/components/SkinViewer3D/index.tsx`
 `skinview3d` wrapper. Mounts the WebGL canvas, applies the user's skin URL
 and (optionally) cape URL, exposes pause / resume / dispose controls.
 
+### `admin/src/components/SkinPreview2D/index.tsx`
+Static PNG preview (no WebGL).
+
+### `admin/src/hooks/usePaginatedList.ts`
+Generic paginated/search hook used by the Textures page. Single
+`useEffect` that fires immediately on mount (no debounce) and debounces
+350 ms on subsequent `search` changes. Optional `onError` callback for
+toasts.
+
+### `admin/src/hooks/useTranslate.ts`
+Thin wrapper around `react-intl`'s `useIntl().formatMessage` with the
+plugin's id prefixed via `getTranslation`.
+
 ### `admin/src/api/texturesApi.ts`
-Wraps fetch calls to `/admin/api/yggdrasil/textures/*` with the admin JWT
-already in scope (Strapi adds it for you when you go through its
-`useFetchClient` hook).
+Wraps fetch calls to `/yggdrasil/textures/*` with the admin JWT pulled
+from `sessionStorage` / `localStorage`. Strapi v5 mounts plugin admin
+routes at `/{plugin-name}/{path}` — there is no `/admin/api/` prefix.
