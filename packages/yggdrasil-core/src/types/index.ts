@@ -4,7 +4,7 @@ export type {
   PlayerUuid,
   ServerId,
 } from './branded.js';
-export { asAccessToken, asClientToken, asPlayerUuid, asServerId } from './branded.js';
+export { asPlayerUuid } from './branded.js';
 
 export type { YggdrasilAuthAgent } from './agent.js';
 

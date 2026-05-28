@@ -1,9 +1,3 @@
-/**
- * Yggdrasil texture domain types — `texturesPayload` is the
- * base64-encoded JSON object that lives inside the `value` field of a
- * `textures` profile property.
- */
-
 export const TextureKinds = {
   SKIN: 'SKIN',
   CAPE: 'CAPE',

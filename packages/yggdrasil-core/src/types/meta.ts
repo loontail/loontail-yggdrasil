@@ -1,8 +1,3 @@
-/**
- * Body of the root `GET /` request. authlib-injector queries this once
- * at JVM start to discover the rest of the endpoints, the signature
- * public keys, and the allowed skin domains.
- */
 export type YggdrasilMetaFeatures = {
   readonly non_email_login?: boolean;
   readonly username_check?: boolean;

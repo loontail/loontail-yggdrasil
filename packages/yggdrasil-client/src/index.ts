@@ -20,7 +20,6 @@ export {
   isYggdrasilClientErrorCode,
 } from './errors/yggdrasil-client-error.js';
 
-// Re-export protocol types so consumers can stay on a single import.
 export type {
   AccessToken,
   ClientToken,

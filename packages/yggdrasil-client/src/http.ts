@@ -7,16 +7,9 @@ import {
 
 export type Fetcher = typeof fetch;
 
-const HEADERS_GET = { accept: 'application/json' } as const;
-const HEADERS_POST = {
-  accept: 'application/json',
-  'content-type': 'application/json',
-} as const;
-
 const isYggdrasilErrorBody = (body: unknown): body is YggdrasilErrorBody =>
   YggdrasilErrorBodySchema.safeParse(body).success;
 
-/** Run `op` and convert any thrown error into a `YggdrasilClientError(NETWORK)`. */
 const runFetch = async (url: string, op: () => Promise<Response>): Promise<Response> => {
   try {
     return await op();
@@ -29,10 +22,6 @@ const runFetch = async (url: string, op: () => Promise<Response>): Promise<Respo
   }
 };
 
-/**
- * Issue a JSON POST. The response is parsed against `responseSchema`
- * when provided; pass `null` for 204-no-body endpoints.
- */
 export const postJson = async <S extends ZodTypeAny | null>(opts: {
   fetcher: Fetcher;
   url: string;
@@ -42,45 +31,36 @@ export const postJson = async <S extends ZodTypeAny | null>(opts: {
   const response = await runFetch(opts.url, () =>
     opts.fetcher(opts.url, {
       method: 'POST',
-      headers: HEADERS_POST,
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify(opts.body),
     }),
   );
   return handleResponse(response, opts.url, opts.responseSchema);
 };
 
-/** Issue a JSON GET. */
 export const getJson = async <S extends ZodTypeAny>(opts: {
   fetcher: Fetcher;
   url: string;
   responseSchema: S;
 }): Promise<z.infer<S>> => {
   const response = await runFetch(opts.url, () =>
-    opts.fetcher(opts.url, { method: 'GET', headers: HEADERS_GET }),
+    opts.fetcher(opts.url, { method: 'GET', headers: { accept: 'application/json' } }),
   );
   return handleResponse(response, opts.url, opts.responseSchema);
 };
 
-/**
- * Build `multipart/form-data` with a single `file` field and run a PUT
- * with the supplied bearer token. Used for skin/cape uploads.
- *
- * NB: do not set Content-Type manually — fetch picks the multipart
- * boundary string automatically when it sees a FormData body.
- */
 export const putMultipart = async <S extends ZodTypeAny | null>(opts: {
   fetcher: Fetcher;
   url: string;
   accessToken: string;
   file: Uint8Array | ArrayBuffer;
-  /** Extra text fields. Values are serialized via `String(value)`. */
   fields?: Readonly<Record<string, string>>;
   responseSchema: S;
 }): Promise<S extends ZodTypeAny ? z.infer<S> : void> => {
   const form = new FormData();
   const view = opts.file instanceof Uint8Array ? opts.file : new Uint8Array(opts.file);
-  // Slice to a plain ArrayBuffer so the Blob constructor is happy in
-  // both Node (undici) and the browser.
+  // fetch sets the multipart boundary itself when given FormData — don't override Content-Type.
+  // The .slice() detaches the view so the Blob works on both undici (Node) and the browser.
   const blob = new Blob([view.slice().buffer], { type: 'image/png' });
   form.append('file', blob, 'asset.png');
   if (opts.fields) {
@@ -96,7 +76,6 @@ export const putMultipart = async <S extends ZodTypeAny | null>(opts: {
   return handleResponse(response, opts.url, opts.responseSchema);
 };
 
-/** Bearer-authenticated DELETE with no body. */
 export const deleteWithAuth = async <S extends ZodTypeAny | null>(opts: {
   fetcher: Fetcher;
   url: string;

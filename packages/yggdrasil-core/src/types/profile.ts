@@ -1,9 +1,3 @@
-/**
- * Yggdrasil profile types — the shape returned by `hasJoined`,
- * `/profile/:uuid`, and the `selectedProfile` / `availableProfiles`
- * fields of an authenticate / refresh response.
- */
-
 export type GameProfileProperty = {
   readonly name: string;
   readonly value: string;
