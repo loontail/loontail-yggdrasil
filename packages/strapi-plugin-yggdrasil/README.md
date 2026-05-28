@@ -56,7 +56,7 @@ This keeps your host Strapi project unchanged except for the
   Skin management lives in `skins-registry`. The Yggdrasil plugin
   reads `up_users.skin` and `up_users.cape` (relative paths) at
   `hasJoined` time, opens the PNG from disk to detect classic/slim
-  via `@loontail/minecraft-kit`'s `detectMojangSkinVariant`, and
+  via `@loontail/minecraft-kit`'s `detectSkinVariant`, and
   serves the texture URL as-is.
 - It does **not** ship a `/authserver/signout` endpoint. Access
   tokens expire by TTL only. Launchers should simply discard their

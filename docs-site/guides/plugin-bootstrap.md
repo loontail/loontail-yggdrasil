@@ -56,7 +56,7 @@ texture tables. The legacy plugin stored skin paths in `up_users.skin` /
 2. Copies each file from `public/skins-registry/<original>` to
    `public/yggdrasil/textures/{skins,capes}/<uuid>-<random>.png`.
 3. Detects the skin variant via
-   `detectMojangSkinVariant(buffer)` from `@loontail/minecraft-kit`.
+   `detectSkinVariant(buffer)` from `@loontail/minecraft-kit`.
 4. Insert rows into `yggdrasil_player_skins` / `yggdrasil_player_capes`.
 5. Drops `up_users.skin` and `up_users.cape` columns.
 6. Inserts a marker row into `yggdrasil_migrations` so the migration never

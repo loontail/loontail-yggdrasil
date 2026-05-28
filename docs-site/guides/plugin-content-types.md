@@ -79,7 +79,7 @@ is not redeclared by this plugin.
   layout and for capacity tracking.
 - `variant` carries the model type — `CLASSIC` (4px arms) or `SLIM` (3px arms).
   The uploader declares it; legacy rows fall back to
-  `detectMojangSkinVariant(buffer)` from `@loontail/minecraft-kit`.
+  `detectSkinVariant(buffer)` from `@loontail/minecraft-kit`.
 
 ## `yggdrasil_player_capes`
 

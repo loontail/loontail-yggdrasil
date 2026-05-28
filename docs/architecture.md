@@ -178,7 +178,7 @@ server/services/*                            ← cross-imports allowed within se
   ↓
 server/utils/*, server/types.ts, server/policies/, server/middlewares/
 @loontail/yggdrasil-core                     ← shape validation, signing helpers, PNG
-@loontail/minecraft-kit                      ← detectMojangSkinVariant for legacy rows
+@loontail/minecraft-kit                      ← detectSkinVariant for legacy rows
 ```
 
 `server/utils/` is leaf code — its only imports are `server/types.ts` and

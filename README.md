@@ -29,7 +29,7 @@ textures.
   from `public/yggdrasil/textures/{skins,capes}/<uuid>-<rev>.png`.
   Mutations protected by a Yggdrasil access token (`PUT /textures/{skin,cape}`).
 - **Skin variant detection** (classic / slim): stored at upload time
-  and re-detected via `detectMojangSkinVariant` from
+  and re-detected via `detectSkinVariant` from
   `@loontail/minecraft-kit` for legacy rows.
 - **authlib-injector**: the Java agent ships inside the
   `@loontail/yggdrasil-client` package as a bundled jar.

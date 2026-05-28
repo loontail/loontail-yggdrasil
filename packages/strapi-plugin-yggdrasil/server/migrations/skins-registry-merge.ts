@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { detectMojangSkinVariant } from '@loontail/minecraft-kit';
+import { detectSkinVariant } from '@loontail/minecraft-kit';
 import { randomUndashedUuid } from '@loontail/yggdrasil-core';
 import type { StorageService } from '../services/storage';
 import type { StrapiInstance } from '../types';
@@ -87,7 +87,7 @@ const detectVariantSafely = (diskPath: string): 'CLASSIC' | 'SLIM' => {
   try {
     if (!existsSync(diskPath)) return 'CLASSIC';
     const buf = readFileSync(diskPath);
-    const detected = detectMojangSkinVariant(buf);
+    const detected = detectSkinVariant(buf);
     return detected.toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
   } catch {
     // Legacy rows can point at deleted files; default to CLASSIC and let copy planning skip missing sources.

@@ -71,7 +71,7 @@ loontail-yggdrasil/
   a Strapi schema field. This is deliberate — touching the
   `users-permissions` schema would force host projects to re-migrate on
   every Strapi minor version bump.
-- **`detectMojangSkinVariant` is imported from `@loontail/minecraft-kit`**,
+- **`detectSkinVariant` is imported from `@loontail/minecraft-kit`**,
   not re-implemented here. The plugin uses it for legacy rows that don't
   carry a stored `variant`. New uploads always supply the variant explicitly.
 - **PNG validation lives in `@loontail/yggdrasil-core`** —

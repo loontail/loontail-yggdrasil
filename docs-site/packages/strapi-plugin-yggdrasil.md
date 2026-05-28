@@ -87,7 +87,7 @@ See the [database schema reference](../reference/db) for the column layout.
 - `@strapi/plugin-users-permissions` v5 (peer) — owns `up_users` and password
   verification
 - `@loontail/yggdrasil-core` — protocol schemas, signing helpers, PNG validators
-- `@loontail/minecraft-kit` — `detectMojangSkinVariant` (for legacy skin rows
+- `@loontail/minecraft-kit` — `detectSkinVariant` (for legacy skin rows
   missing the `variant` column)
 - `skinview3d` — admin UI 3D skin preview
 

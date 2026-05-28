@@ -82,7 +82,7 @@ don't need to be renamed.
 3. Caps the size at 256 KB — generous for HD packs, blocks accidental multi-MB
    uploads.
 4. For skins only: re-detects the variant via
-   `detectMojangSkinVariant(buffer)` from `@loontail/minecraft-kit` if the
+   `detectSkinVariant(buffer)` from `@loontail/minecraft-kit` if the
    uploader didn't supply one (legacy `up_users.skin` rows during migration use
    this path).
 5. Builds the new filename: `<uuid>-<randomBytes(6).toString('hex')>.png`.
@@ -117,7 +117,7 @@ deterministically know which model is intended (the difference is in how
 Minecraft maps the texture, not in the texture itself).
 
 For *legacy* rows migrated from the pre-plugin `skins-registry`, the variant
-isn't stored. Those rows fall back to `detectMojangSkinVariant(buffer)` from
+isn't stored. Those rows fall back to `detectSkinVariant(buffer)` from
 `@loontail/minecraft-kit`, which uses Mojang's transparency heuristics on the
 image data.
 
