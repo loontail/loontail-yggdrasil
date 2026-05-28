@@ -1,20 +1,14 @@
 import type { SkinVariant } from '@loontail/yggdrasil-core';
 import type { StrapiInstance } from '../types';
 
-const SKIN_UID = 'plugin::yggdrasil.player-skin';
-const CAPE_UID = 'plugin::yggdrasil.player-cape';
+const UIDS = {
+  skin: 'plugin::yggdrasil.player-skin',
+  cape: 'plugin::yggdrasil.player-cape',
+} as const;
 
-export type SkinRow = {
-  readonly id: number;
-  readonly userId: number;
-  readonly username: string | null;
-  readonly filePath: string;
-  readonly fileUrl: string;
-  readonly fileSize: number | null;
-  readonly variant: SkinVariant;
-};
+export type AssetKind = 'skin' | 'cape';
 
-export type CapeRow = {
+type AssetRowBase = {
   readonly id: number;
   readonly userId: number;
   readonly username: string | null;
@@ -23,43 +17,19 @@ export type CapeRow = {
   readonly fileSize: number | null;
 };
 
-type CommonUpsert = {
+export type SkinRow = AssetRowBase & { readonly variant: SkinVariant };
+export type CapeRow = AssetRowBase;
+export type AssetRow<K extends AssetKind> = K extends 'skin' ? SkinRow : CapeRow;
+
+type AssetUpsertBase = {
   username?: string;
   filePath: string;
   fileUrl: string;
   fileSize?: number;
 };
-
-type SkinUpsert = CommonUpsert & { variant?: SkinVariant };
-type CapeUpsert = CommonUpsert;
-
-type RawRow = Record<string, unknown>;
-
-const toSkin = (raw: RawRow | null | undefined): SkinRow | null => {
-  if (!raw) return null;
-  const variant = (raw.variant as string)?.toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
-  return {
-    id: Number(raw.id),
-    userId: Number(raw.userId),
-    username: raw.username == null ? null : String(raw.username),
-    filePath: String(raw.filePath ?? ''),
-    fileUrl: String(raw.fileUrl ?? ''),
-    fileSize: raw.fileSize == null ? null : Number(raw.fileSize),
-    variant,
-  };
-};
-
-const toCape = (raw: RawRow | null | undefined): CapeRow | null => {
-  if (!raw) return null;
-  return {
-    id: Number(raw.id),
-    userId: Number(raw.userId),
-    username: raw.username == null ? null : String(raw.username),
-    filePath: String(raw.filePath ?? ''),
-    fileUrl: String(raw.fileUrl ?? ''),
-    fileSize: raw.fileSize == null ? null : Number(raw.fileSize),
-  };
-};
+export type SkinUpsert = AssetUpsertBase & { variant?: SkinVariant };
+export type CapeUpsert = AssetUpsertBase;
+export type AssetUpsert<K extends AssetKind> = K extends 'skin' ? SkinUpsert : CapeUpsert;
 
 export type ListPage = {
   readonly page: number;
@@ -72,172 +42,125 @@ export type ListResult<T> = {
   readonly total: number;
 };
 
+type RawRow = Record<string, unknown>;
+
+const toBase = (raw: RawRow): AssetRowBase => ({
+  id: Number(raw.id),
+  userId: Number(raw.userId),
+  username: raw.username == null ? null : String(raw.username),
+  filePath: String(raw.filePath ?? ''),
+  fileUrl: String(raw.fileUrl ?? ''),
+  fileSize: raw.fileSize == null ? null : Number(raw.fileSize),
+});
+
+const toRow = <K extends AssetKind>(
+  kind: K,
+  raw: RawRow | null | undefined,
+): AssetRow<K> | null => {
+  if (!raw) return null;
+  const base = toBase(raw);
+  if (kind === 'skin') {
+    const variant = (raw.variant as string)?.toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
+    return { ...base, variant } as AssetRow<K>;
+  }
+  return base as AssetRow<K>;
+};
+
 const buildWhere = (search?: string): Record<string, unknown> =>
   search ? { $or: [{ username: { $containsi: search } }] } : {};
 
 export type TexturesStoreService = ReturnType<typeof createTexturesStoreService>;
 
 export const createTexturesStoreService = ({ strapi }: { strapi: StrapiInstance }) => {
-  const skin = strapi.db.query(SKIN_UID);
-  const cape = strapi.db.query(CAPE_UID);
-
-  const findOneSkin = async (where: Record<string, unknown>): Promise<SkinRow | null> =>
-    toSkin((await skin.findOne({ where })) as RawRow | null);
-
-  const findOneCape = async (where: Record<string, unknown>): Promise<CapeRow | null> =>
-    toCape((await cape.findOne({ where })) as RawRow | null);
+  const queries = {
+    skin: strapi.db.query(UIDS.skin),
+    cape: strapi.db.query(UIDS.cape),
+  } as const;
 
   return {
-    findSkinByUserId: (userId: number) => findOneSkin({ userId }),
-    findCapeByUserId: (userId: number) => findOneCape({ userId }),
-    findSkinById: (id: number) => findOneSkin({ id }),
-    findCapeById: (id: number) => findOneCape({ id }),
+    async findByUserId<K extends AssetKind>(kind: K, userId: number): Promise<AssetRow<K> | null> {
+      return toRow(kind, (await queries[kind].findOne({ where: { userId } })) as RawRow | null);
+    },
 
-    async upsertSkin(userId: number, data: SkinUpsert): Promise<SkinRow> {
-      const existing = await skin.findOne({ where: { userId } });
-      const payload = {
-        userId,
-        username: data.username,
-        filePath: data.filePath,
-        fileUrl: data.fileUrl,
-        fileSize: data.fileSize,
-        variant: data.variant ?? 'CLASSIC',
-      };
-      const row = existing
-        ? ((await skin.update({ where: { userId }, data: payload })) as RawRow)
-        : ((await skin.create({ data: payload })) as RawRow);
-      const mapped = toSkin(row);
-      if (!mapped) throw new Error('upsertSkin returned an unparsable row');
+    async findById<K extends AssetKind>(kind: K, id: number): Promise<AssetRow<K> | null> {
+      return toRow(kind, (await queries[kind].findOne({ where: { id } })) as RawRow | null);
+    },
+
+    async upsert<K extends AssetKind>(
+      kind: K,
+      userId: number,
+      data: AssetUpsert<K>,
+    ): Promise<AssetRow<K>> {
+      const q = queries[kind];
+      const existing = await q.findOne({ where: { userId } });
+      const payload: Record<string, unknown> = { userId, ...data };
+      if (kind === 'skin') {
+        payload.variant = (data as SkinUpsert).variant ?? 'CLASSIC';
+      }
+      const row = (
+        existing
+          ? await q.update({ where: { userId }, data: payload })
+          : await q.create({ data: payload })
+      ) as RawRow;
+      const mapped = toRow(kind, row);
+      if (!mapped) throw new Error(`upsert(${kind}) returned an unparsable row`);
       return mapped;
     },
 
-    async upsertCape(userId: number, data: CapeUpsert): Promise<CapeRow> {
-      const existing = await cape.findOne({ where: { userId } });
-      const payload = {
-        userId,
-        username: data.username,
-        filePath: data.filePath,
-        fileUrl: data.fileUrl,
-        fileSize: data.fileSize,
-      };
-      const row = existing
-        ? ((await cape.update({ where: { userId }, data: payload })) as RawRow)
-        : ((await cape.create({ data: payload })) as RawRow);
-      const mapped = toCape(row);
-      if (!mapped) throw new Error('upsertCape returned an unparsable row');
-      return mapped;
+    async deleteByUserId(kind: AssetKind, userId: number): Promise<void> {
+      const q = queries[kind];
+      const existing = await q.findOne({ where: { userId } });
+      if (existing) await q.delete({ where: { userId } });
     },
 
-    async deleteSkinByUserId(userId: number): Promise<void> {
-      const existing = await skin.findOne({ where: { userId } });
-      if (existing) await skin.delete({ where: { userId } });
+    async deleteById(kind: AssetKind, id: number): Promise<void> {
+      await queries[kind].delete({ where: { id } });
     },
 
-    async deleteCapeByUserId(userId: number): Promise<void> {
-      const existing = await cape.findOne({ where: { userId } });
-      if (existing) await cape.delete({ where: { userId } });
-    },
-
-    async deleteSkinById(id: number): Promise<void> {
-      await skin.delete({ where: { id } });
-    },
-
-    async deleteCapeById(id: number): Promise<void> {
-      await cape.delete({ where: { id } });
-    },
-
-    async findManySkins({
-      page = 1,
-      pageSize = 25,
-      search,
-    }: ListPage): Promise<ListResult<SkinRow>> {
+    async findMany<K extends AssetKind>(
+      kind: K,
+      { page = 1, pageSize = 25, search }: ListPage,
+    ): Promise<ListResult<AssetRow<K>>> {
+      const q = queries[kind];
       const where = buildWhere(search);
       const [data, total] = await Promise.all([
-        skin.findMany({
+        q.findMany({
           where,
           limit: pageSize,
           offset: (page - 1) * pageSize,
           orderBy: { updatedAt: 'desc' },
         }) as Promise<RawRow[]>,
-        skin.count({ where }) as Promise<number>,
+        q.count({ where }) as Promise<number>,
       ]);
       return {
-        data: data.map((r) => toSkin(r) as SkinRow).filter((r): r is SkinRow => Boolean(r)),
+        data: data.map((r) => toRow(kind, r)).filter((r): r is AssetRow<K> => r !== null),
         total,
       };
     },
 
-    async findManyCapes({
-      page = 1,
-      pageSize = 25,
-      search,
-    }: ListPage): Promise<ListResult<CapeRow>> {
-      const where = buildWhere(search);
-      const [data, total] = await Promise.all([
-        cape.findMany({
-          where,
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-          orderBy: { updatedAt: 'desc' },
-        }) as Promise<RawRow[]>,
-        cape.count({ where }) as Promise<number>,
-      ]);
-      return {
-        data: data.map((r) => toCape(r) as CapeRow).filter((r): r is CapeRow => Boolean(r)),
-        total,
-      };
-    },
-
-    /**
-     * Walk both tables in fixed-size batches and report rows whose
-     * `filePath` is no longer on disk. Iterating without pagination
-     * would be a memory hazard once the user base grows.
-     */
     async findMissing(
       exists: (filePath: string) => boolean,
     ): Promise<{ missingSkins: SkinRow[]; missingCapes: CapeRow[] }> {
       const BATCH = 500;
-      const collectMissing = async <T>(
-        scan: (offset: number) => Promise<T[]>,
-        diskPathOf: (row: T) => string,
-      ): Promise<T[]> => {
-        const missing: T[] = [];
+      const scan = async <K extends AssetKind>(kind: K): Promise<AssetRow<K>[]> => {
+        const missing: AssetRow<K>[] = [];
         let offset = 0;
         while (true) {
-          const batch = await scan(offset);
-          for (const row of batch) {
-            if (!exists(diskPathOf(row))) missing.push(row);
+          const rows = (await queries[kind].findMany({
+            limit: BATCH,
+            offset,
+            orderBy: { id: 'asc' },
+          })) as RawRow[];
+          for (const raw of rows) {
+            const row = toRow(kind, raw);
+            if (row && !exists(row.filePath)) missing.push(row);
           }
-          if (batch.length < BATCH) break;
+          if (rows.length < BATCH) break;
           offset += BATCH;
         }
         return missing;
       };
-
-      const [missingSkins, missingCapes] = await Promise.all([
-        collectMissing<SkinRow>(
-          async (offset) => {
-            const rows = (await skin.findMany({
-              limit: BATCH,
-              offset,
-              orderBy: { id: 'asc' },
-            })) as RawRow[];
-            return rows.map((r) => toSkin(r) as SkinRow).filter((r): r is SkinRow => Boolean(r));
-          },
-          (r) => r.filePath,
-        ),
-        collectMissing<CapeRow>(
-          async (offset) => {
-            const rows = (await cape.findMany({
-              limit: BATCH,
-              offset,
-              orderBy: { id: 'asc' },
-            })) as RawRow[];
-            return rows.map((r) => toCape(r) as CapeRow).filter((r): r is CapeRow => Boolean(r));
-          },
-          (r) => r.filePath,
-        ),
-      ]);
+      const [missingSkins, missingCapes] = await Promise.all([scan('skin'), scan('cape')]);
       return { missingSkins, missingCapes };
     },
   };

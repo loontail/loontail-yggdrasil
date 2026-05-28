@@ -52,8 +52,6 @@ const memoryBackend = (): Backend => {
 };
 
 const dbBackend = (strapi: StrapiInstance): Backend => {
-  // Placeholder until the optional db-backed CT is wired. Falls back
-  // to memory + a one-time warning so misconfiguration is visible.
   strapi.log.warn(
     '[yggdrasil] joinBackend="db" is not yet implemented; falling back to memory backend',
   );

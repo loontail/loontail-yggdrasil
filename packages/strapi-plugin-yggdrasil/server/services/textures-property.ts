@@ -6,6 +6,7 @@ import {
 } from '@loontail/yggdrasil-core';
 import { readConfig } from '../config';
 import type { StrapiInstance } from '../types';
+import { pluginService } from '../utils/strapi-runtime';
 import type { CryptoService } from './crypto';
 import type { TexturesStoreService } from './textures-store';
 import type { YggdrasilUserRow } from './users';
@@ -15,41 +16,26 @@ const TEXTURES_PROPERTY_NAME = 'textures';
 const isHttpUrl = (value: string): boolean =>
   value.startsWith('http://') || value.startsWith('https://');
 
-/**
- * Build the absolute URL we hand back to clients. Constructed from the
- * configured `publicUrl`'s origin + the relative path the textures-store
- * persisted. This guarantees the host matches an entry in `skinDomains`.
- */
 const toPublicUrl = (strapi: StrapiInstance, relUrl: string): string => {
   if (isHttpUrl(relUrl)) return relUrl;
-  const cfg = readConfig(strapi);
-  const origin = new URL(cfg.publicUrl).origin;
+  const origin = new URL(readConfig(strapi).publicUrl).origin;
   return `${origin}${relUrl.startsWith('/') ? relUrl : `/${relUrl}`}`;
 };
 
-const pluginService = <T>(strapi: StrapiInstance, name: string): T =>
-  strapi.plugin('yggdrasil').service(name) as T;
-
-export type TexturesService = ReturnType<typeof createTexturesService>;
+export type TexturesPropertyService = ReturnType<typeof createTexturesPropertyService>;
 
 export type BuildOptions = {
-  /** When false, the property is returned without `signature`. */
   readonly signed?: boolean;
 };
 
-export const createTexturesService = ({
+export const createTexturesPropertyService = ({
   strapi,
   crypto,
 }: {
   strapi: StrapiInstance;
   crypto: CryptoService;
 }) => ({
-  /**
-   * Build the `textures` profile property for `user`. Returns `null`
-   * when the user has neither a skin nor a cape (so the caller can
-   * omit `properties` entirely).
-   */
-  async buildTexturesProperty(
+  async build(
     user: YggdrasilUserRow,
     options: BuildOptions = {},
   ): Promise<GameProfileProperty | null> {
@@ -57,8 +43,8 @@ export const createTexturesService = ({
 
     const store = pluginService<TexturesStoreService>(strapi, 'textures-store');
     const [skinRow, capeRow] = await Promise.all([
-      store.findSkinByUserId(user.id),
-      store.findCapeByUserId(user.id),
+      store.findByUserId('skin', user.id),
+      store.findByUserId('cape', user.id),
     ]);
     if (!skinRow && !capeRow) return null;
 
@@ -77,11 +63,10 @@ export const createTexturesService = ({
       ...(cape ? { cape } : {}),
     });
     const value = encodeTexturesPayloadBase64(payload);
-    const property: GameProfileProperty = {
+    return {
       name: TEXTURES_PROPERTY_NAME,
       value,
       ...(options.signed === false ? {} : { signature: crypto.signBase64(value) }),
     };
-    return property;
   },
 });

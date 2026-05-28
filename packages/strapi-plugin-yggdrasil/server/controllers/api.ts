@@ -6,11 +6,6 @@ import { parseOrThrow, pluginService } from './helpers';
 type ProfileSummary = { id: string; name: string };
 
 export default ({ strapi }: { strapi: StrapiInstance }) => ({
-  /**
-   * `POST /api/profiles/minecraft` — bulk-resolve up to 10 usernames
-   * to `{ id, name }` profiles. Usernames not found are silently
-   * omitted (matches Mojang behaviour).
-   */
   async bulkProfiles(ctx: KoaContext) {
     const names = parseOrThrow(ctx, BulkProfilesRequestSchema, ctx.request.body);
     const users = pluginService<UsersService>(strapi, 'users');

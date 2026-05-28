@@ -4,7 +4,6 @@ import type { UsersService, YggdrasilUserRow } from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
 
 const HTTP_UNAUTHORIZED = 401;
-
 const BEARER_PREFIX = 'Bearer ';
 
 const readBearer = (ctx: KoaContext): string | null => {
@@ -37,15 +36,6 @@ const unauthorized = (cause: string): never => {
   );
 };
 
-/**
- * Strapi v5 policy that authenticates a request via a Yggdrasil
- * access token (issued by `/authserver/authenticate`). On success it
- * attaches `ctx.state.yggdrasilUser = { id, uuid, username }` so the
- * controller can identify the caller without re-reading the token.
- * On failure it throws a Yggdrasil-shaped 401 — the `error-shape`
- * middleware translates it into the protocol's `{ error,
- * errorMessage }` envelope.
- */
 const yggdrasilTokenAuth = async (
   ctx: KoaContext,
   _config: unknown,

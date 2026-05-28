@@ -20,11 +20,9 @@ type KeyState = {
   archivedPublicPems: readonly string[];
 };
 
-type Strapi = StrapiInstance;
-
 export type CryptoService = ReturnType<typeof createCryptoService>;
 
-export const createCryptoService = ({ strapi }: { strapi: Strapi }) => {
+export const createCryptoService = ({ strapi }: { strapi: StrapiInstance }) => {
   let state: KeyState | null = null;
 
   const privateKeyPath = (): string => {
@@ -77,7 +75,6 @@ export const createCryptoService = ({ strapi }: { strapi: Strapi }) => {
     if (existsSync(publicKeyPath())) {
       publicPem = readFileSync(publicKeyPath(), 'utf8');
     } else {
-      // Recover public from private if the side-file is missing.
       publicPem = createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }) as string;
       writeFileSync(publicKeyPath(), publicPem, { encoding: 'utf8' });
     }
@@ -95,27 +92,20 @@ export const createCryptoService = ({ strapi }: { strapi: Strapi }) => {
   };
 
   return {
-    /** Pre-warm / generate-if-missing. Call from bootstrap. */
     async init(): Promise<void> {
       ensure();
     },
 
-    /** PEM of the currently-active public key. */
     publicKeyPem(): string {
       return ensure().publicPem;
     },
 
-    /** All public keys we'd accept (active + archive), for `signaturePublickeys[]`. */
     allPublicKeyPems(): readonly string[] {
       const s = ensure();
       return [s.publicPem, ...s.archivedPublicPems];
     },
 
-    /**
-     * Sign a string with SHA1withRSA / PKCS#1 v1.5 (Yggdrasil spec).
-     * Returns the base64 signature ready to drop into
-     * `properties[0].signature`.
-     */
+    // Yggdrasil spec mandates SHA1-with-RSA / PKCS#1 v1.5.
     signBase64(payload: string): string {
       const signer = createSign('RSA-SHA1');
       signer.update(payload);

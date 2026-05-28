@@ -5,11 +5,6 @@ import type { KoaContext, StrapiInstance } from '../types';
 import { pluginService } from './helpers';
 
 export default ({ strapi }: { strapi: StrapiInstance }) => ({
-  /**
-   * `GET /` — ALI (authlib-injector) metadata. The launcher hits this
-   * once per JVM start to discover the rest of the endpoints, the RSA
-   * public key, and the allowed skin domains.
-   */
   async meta(ctx: KoaContext) {
     const cfg = readConfig(strapi);
     const crypto = pluginService<CryptoService>(strapi, 'crypto');

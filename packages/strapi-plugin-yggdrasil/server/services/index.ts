@@ -1,11 +1,14 @@
+import type { CryptoService } from './crypto';
 import { createCryptoService } from './crypto';
 import { createJoinSessionsService } from './join-sessions';
 import { createPasswordsService } from './passwords';
 import { createStorageService } from './storage';
-import { createTexturesService } from './textures';
+import { createTexturesPropertyService } from './textures-property';
 import { createTexturesStoreService } from './textures-store';
 import { createTokensService } from './tokens';
 import { createUsersService } from './users';
+
+type StrapiArg = Parameters<typeof createCryptoService>[0];
 
 export default {
   crypto: createCryptoService,
@@ -15,14 +18,8 @@ export default {
   'join-sessions': createJoinSessionsService,
   storage: createStorageService,
   'textures-store': createTexturesStoreService,
-  textures: ({ strapi }: { strapi: unknown }) => {
-    // The textures service composes the crypto service. We resolve it
-    // lazily via `strapi.plugin('yggdrasil').service('crypto')` so the
-    // service factory order does not matter.
-    const s = strapi as Parameters<typeof createCryptoService>[0]['strapi'];
-    const crypto = s.plugin('yggdrasil').service('crypto') as ReturnType<
-      typeof createCryptoService
-    >;
-    return createTexturesService({ strapi: s, crypto });
+  'textures-property': ({ strapi }: StrapiArg) => {
+    const crypto = strapi.plugin('yggdrasil').service('crypto') as CryptoService;
+    return createTexturesPropertyService({ strapi, crypto });
   },
 };

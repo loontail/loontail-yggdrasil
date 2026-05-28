@@ -5,11 +5,6 @@ const HTTP_INTERNAL = 500;
 
 const isYggdrasilRoute = (path: string): boolean => path.startsWith('/api/yggdrasil');
 
-/**
- * Wraps any thrown error from a Yggdrasil route into the canonical
- * `{ error, errorMessage, cause? }` envelope. Non-Yggdrasil routes are
- * untouched so other plugins' error semantics are preserved.
- */
 export default () => async (ctx: Context, next: Next) => {
   if (!isYggdrasilRoute(ctx.path)) {
     await next();

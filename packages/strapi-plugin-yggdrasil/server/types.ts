@@ -1,13 +1,5 @@
-/**
- * Internal types shared across the plugin's server-side modules.
- * Strapi v5's TypeScript surface is intentionally narrow here — we
- * model what we need rather than depend on `@strapi/types` (which
- * pulls a large transitive tree).
- */
-
 import type { Context as KoaCtx } from 'koa';
 
-/** Minimal slice of `@strapi/strapi`'s `Strapi` instance that we use. */
 export type StrapiInstance = {
   readonly log: {
     info(message: string, ...args: unknown[]): void;
@@ -44,11 +36,6 @@ export type StrapiInstance = {
   };
 };
 
-/**
- * Loose Knex-like shape — just what `bootstrap.ts` and a few services
- * call. We intentionally avoid pulling Knex types in directly to keep
- * `peerDependencies` slim.
- */
 export type KnexLike = {
   schema: {
     hasTable(table: string): Promise<boolean>;
@@ -58,7 +45,6 @@ export type KnexLike = {
     dropTable(table: string): Promise<unknown>;
     dropTableIfExists(table: string): Promise<unknown>;
   };
-  /** Dialect-agnostic SQL function builders (e.g. `knex.fn.now()`). */
   readonly fn: {
     now(): unknown;
   };
@@ -84,11 +70,6 @@ export type KnexColumnBuilder = {
   primary(): KnexColumnBuilder;
 };
 
-/**
- * Knex query builders are thenable themselves — awaiting one executes
- * the query. Modelled as `PromiseLike<unknown>` so generic `await
- * qb.delete()` works without a separate `.then(...)` cast.
- */
 export type KnexQueryBuilder = PromiseLike<unknown> & {
   where(criteria: Record<string, unknown>): KnexQueryBuilder;
   where(column: string, operator: string, value: unknown): KnexQueryBuilder;

@@ -5,26 +5,6 @@ import { randomUndashedUuid } from '@loontail/yggdrasil-core';
 import type { StorageService } from '../services/storage';
 import type { StrapiInstance } from '../types';
 
-/**
- * One-shot migration that absorbs the standalone `skins-registry` plugin
- * into this plugin. Triple-phase, marker-protected, idempotent:
- *
- * 1. Phase A — copy PNG files from `public/skins-registry/{skins,capes}/`
- *    into `public/yggdrasil/textures/{skins,capes}/` using uuid-based
- *    filenames. Safe to retry: `copyFile` skips when the destination
- *    already exists.
- * 2. Phase B — single Knex transaction:
- *      - INSERT new rows into `yggdrasil_player_skins` / `_capes`,
- *      - DROP the old `skins_registry_*` tables,
- *      - drop `up_users.skin` / `up_users.cape` columns,
- *      - INSERT the marker row.
- *    Atomic — a crash leaves either the old or the new schema in place,
- *    never a half-migrated mix.
- * 3. Phase C — best-effort delete of the legacy `public/skins-registry/`
- *    directory. Failures are logged warn-level; the marker says we're
- *    done regardless.
- */
-
 const MARKER_TABLE = 'yggdrasil_migrations';
 const MARKER_KEY = 'skins-registry-merge';
 
@@ -183,9 +163,6 @@ const planCopies = async (
 };
 
 const legacyDiskPath = (strapi: StrapiInstance, storedFilePath: string): string => {
-  // `storedFilePath` is an absolute path from the skins-registry plugin's
-  // boot dir. If absolute and exists, trust it. Otherwise resolve
-  // relative to the Strapi root.
   if (storedFilePath && existsSync(storedFilePath)) return storedFilePath;
   return resolve(strapi.dirs.app.root, storedFilePath);
 };
@@ -291,12 +268,8 @@ export const runSkinsRegistryMerge = async (strapi: StrapiInstance): Promise<voi
 
   const plans = await planCopies(strapi, storage, knex, legacySkins, legacyCapes);
 
-  // Phase A — copy files (outside the transaction, idempotent on retry).
-  strapi.log.info('[yggdrasil] migration: phase A — copying files');
   copyFiles(strapi, plans);
 
-  // Phase B — atomic DB swap.
-  strapi.log.info('[yggdrasil] migration: phase B — db swap');
   await knex.transaction(async (trx) => {
     await insertNewRows(trx, plans);
     await dropLegacyTables(trx);
@@ -304,8 +277,6 @@ export const runSkinsRegistryMerge = async (strapi: StrapiInstance): Promise<voi
     await trx(MARKER_TABLE).insert({ key: MARKER_KEY, appliedAt: new Date() });
   });
 
-  // Phase C — best-effort filesystem cleanup, outside the transaction.
-  strapi.log.info('[yggdrasil] migration: phase C — cleanup');
   cleanLegacyDir(strapi);
 
   strapi.log.info('[yggdrasil] migration: skins-registry-merge done');

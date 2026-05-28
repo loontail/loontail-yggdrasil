@@ -4,9 +4,8 @@ import type { StrapiInstance } from '../types';
 
 const TOKEN_UID = 'plugin::yggdrasil.token';
 const TOKEN_TABLE = 'yggdrasil_tokens';
-
-/** Tokens are 32 random bytes (64 hex chars) — same shape Mojang uses. */
 const TOKEN_HEX_BYTES = 32;
+
 const issueOpaqueToken = (): string => randomBytes(TOKEN_HEX_BYTES).toString('hex');
 
 type TokenRow = {
@@ -58,7 +57,6 @@ export const createTokensService = ({ strapi }: { strapi: StrapiInstance }) => {
     if (!raw) return null;
     const row = toRow(raw);
     if (Date.parse(row.expiresAt) <= Date.now()) {
-      // Expired — purge eagerly and report as missing.
       await strapi.db.query(TOKEN_UID).delete({ where: { id: row.id } });
       return null;
     }
@@ -80,18 +78,12 @@ export const createTokensService = ({ strapi }: { strapi: StrapiInstance }) => {
   };
 
   return {
-    /** Issue a new token pair for `userId`. Enforces the per-user cap. */
     async issue(userId: number, clientToken?: string): Promise<IssuedToken> {
       const cfg = config();
       await enforceCap(userId);
       const issuedAt = new Date();
       const expiresAt = new Date(issuedAt.getTime() + cfg.tokens.accessTtlSeconds * 1000);
       const accessToken = issueOpaqueToken();
-      // Reuse the caller's `clientToken` when present so the launcher
-      // keeps its "device" identity across refreshes. Treat empty
-      // strings the same as `undefined` even though the request schema
-      // already rejects them — defence in depth against accidental
-      // direct callers.
       const finalClientToken =
         clientToken && clientToken.length > 0 ? clientToken : issueOpaqueToken();
       await strapi.db.query(TOKEN_UID).create({
@@ -106,7 +98,6 @@ export const createTokensService = ({ strapi }: { strapi: StrapiInstance }) => {
       return { accessToken, clientToken: finalClientToken, expiresAt };
     },
 
-    /** Return the validated token, or `null` if missing/expired/mismatched. */
     async validate(accessToken: string, clientToken?: string): Promise<ValidatedToken | null> {
       const row = await findActive(accessToken, clientToken);
       if (!row) return null;
@@ -118,10 +109,6 @@ export const createTokensService = ({ strapi }: { strapi: StrapiInstance }) => {
       };
     },
 
-    /**
-     * Rotate the access token. The old token is deleted; the client
-     * token is preserved (so the launcher keeps its "device" identity).
-     */
     async refresh(accessToken: string, clientToken?: string): Promise<IssuedToken | null> {
       const existing = await findActive(accessToken, clientToken);
       if (!existing) return null;
@@ -129,23 +116,15 @@ export const createTokensService = ({ strapi }: { strapi: StrapiInstance }) => {
       return this.issue(existing.userId, existing.clientToken);
     },
 
-    /** Drop the supplied token. Idempotent. */
     async invalidate(accessToken: string, clientToken?: string): Promise<void> {
       const where: Record<string, unknown> = { accessToken };
       if (clientToken) where.clientToken = clientToken;
       await strapi.db.query(TOKEN_UID).delete({ where });
     },
 
-    /**
-     * Remove every token whose `expiresAt` is in the past. Uses Knex's
-     * `fn.now()` builder so the SQL works across Postgres, MySQL, and
-     * SQLite without per-dialect raw strings.
-     */
     async cleanupExpired(): Promise<number> {
       const knex = strapi.db.connection;
-      // Some Knex dialects (notably SQLite) don't support `.returning()`
-      // on DELETE — they just resolve to a row-count number instead of
-      // an array. Coerce either shape into a number.
+      // SQLite's Knex DELETE doesn't support .returning() — resolves to a count number.
       const result = (await knex(TOKEN_TABLE).where('expires_at', '<=', knex.fn.now()).delete()) as
         | number
         | Record<string, unknown>[];

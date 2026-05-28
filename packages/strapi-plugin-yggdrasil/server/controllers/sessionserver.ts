@@ -7,7 +7,7 @@ import {
   undashUuid,
 } from '@loontail/yggdrasil-core';
 import type { JoinSessionsService } from '../services/join-sessions';
-import type { TexturesService } from '../services/textures';
+import type { TexturesPropertyService } from '../services/textures-property';
 import type { TokensService } from '../services/tokens';
 import type { UsersService, YggdrasilUserRow } from '../services/users';
 import type { KoaContext, StrapiInstance } from '../types';
@@ -28,8 +28,8 @@ const buildProfile = async (
       'Profile has no UUID.',
     );
   }
-  const textures = pluginService<TexturesService>(strapi, 'textures');
-  const property = await textures.buildTexturesProperty(user, { signed });
+  const textures = pluginService<TexturesPropertyService>(strapi, 'textures-property');
+  const property = await textures.build(user, { signed });
   return {
     id: user.uuid,
     name: user.username,
@@ -49,9 +49,6 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
       throw new YggdrasilHttpError(HTTP_FORBIDDEN, 'ForbiddenOperationException', 'Invalid token.');
     }
     const owner = await users.findById(token.userId);
-    // Compare UUIDs case-insensitively. Newly-issued ids are always
-    // lowercase (see `randomUndashedUuid`) but legacy or hand-seeded rows
-    // may not be, and `selectedProfile` is normalised on the client too.
     if (!owner || !owner.uuid || owner.uuid.toLowerCase() !== body.selectedProfile.toLowerCase()) {
       throw new YggdrasilHttpError(
         HTTP_FORBIDDEN,
@@ -100,11 +97,7 @@ export default ({ strapi }: { strapi: StrapiInstance }) => ({
       ctx.body = null;
       return;
     }
-    // The spec is ambiguous about the default, but Mojang's vanilla client
-    // calls this endpoint without `?unsigned` and refuses unsigned payloads
-    // (`Signature is missing from textures payload`). Default to signed; the
-    // explicit `?unsigned=true` opt-out skips the RSA sign for callers that
-    // genuinely don't need it.
+    // Mojang's vanilla client refuses unsigned payloads; default to signed.
     const signed = query.unsigned !== true;
     ctx.body = await buildProfile(strapi, found, signed);
   },

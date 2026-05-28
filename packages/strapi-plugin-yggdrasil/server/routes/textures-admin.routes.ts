@@ -1,58 +1,52 @@
-/**
- * Admin-namespace routes for the textures subsystem. Mounted under
- * `/admin/api/yggdrasil/textures/*` and protected by Strapi's default
- * admin auth chain (the admin JWT). These power the plugin's admin
- * UI — listing, on-behalf-of upload, validate, purge-missing.
- */
 const routes = {
   type: 'admin',
   routes: [
     {
       method: 'GET',
       path: '/textures/skins',
-      handler: 'textures.listSkins',
+      handler: 'textures-admin.listSkins',
       config: { policies: [] },
     },
     {
       method: 'GET',
       path: '/textures/capes',
-      handler: 'textures.listCapes',
+      handler: 'textures-admin.listCapes',
       config: { policies: [] },
     },
     {
       method: 'POST',
       path: '/textures/upload/skin',
-      handler: 'textures.adminUploadSkin',
+      handler: 'textures-admin.uploadSkin',
       config: { policies: [] },
     },
     {
       method: 'POST',
       path: '/textures/upload/cape',
-      handler: 'textures.adminUploadCape',
+      handler: 'textures-admin.uploadCape',
       config: { policies: [] },
     },
     {
       method: 'DELETE',
       path: '/textures/skins/:id',
-      handler: 'textures.adminDeleteSkin',
+      handler: 'textures-admin.deleteSkin',
       config: { policies: [] },
     },
     {
       method: 'DELETE',
       path: '/textures/capes/:id',
-      handler: 'textures.adminDeleteCape',
+      handler: 'textures-admin.deleteCape',
       config: { policies: [] },
     },
     {
       method: 'POST',
       path: '/textures/validate',
-      handler: 'textures.validate',
+      handler: 'textures-admin.validate',
       config: { policies: [] },
     },
     {
       method: 'POST',
       path: '/textures/purge-missing',
-      handler: 'textures.purgeMissing',
+      handler: 'textures-admin.purgeMissing',
       config: { policies: [] },
     },
   ],

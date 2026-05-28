@@ -1,10 +1,3 @@
-/**
- * Plugin configuration. Strapi merges the user's `config/plugins.js`
- * values into the `default` object below and runs `validator` on the
- * result. Services then read the merged values via
- * `strapi.plugin('yggdrasil').config(path)`.
- */
-
 import type { StrapiInstance } from './types';
 
 export type YggdrasilTokensConfig = {
@@ -68,24 +61,14 @@ export default {
   validator,
 };
 
-/**
- * Read the merged plugin config from a `Strapi` instance, with
- * derived `skinDomains` (defaults to `[host(publicUrl)]` when empty).
- */
 export const readConfig = (strapi: StrapiInstance): YggdrasilPluginConfig => {
-  // `strapi.config.get('plugin::yggdrasil')` returns the merged plugin
-  // config object (defaults + user overrides) in Strapi v5. Earlier
-  // attempts with `strapi.plugin('yggdrasil').config()` returned
-  // undefined because the wrapper requires a path argument.
   const raw = strapi.config.get('plugin::yggdrasil') as YggdrasilPluginConfig;
   if (!raw) {
     throw new Error(
       'yggdrasil plugin config is not loaded; check that the plugin is registered in config/plugins.js',
     );
   }
-  // Use `hostname` (no port) — Mojang's texture whitelist checks `URI.getHost()`
-  // which strips the port too, so a skinDomain like `localhost:1338` would
-  // never match `localhost`.
+  // `URL.hostname` drops the port — Mojang's whitelist matches against `URI.getHost()` which also strips it.
   const skinDomains =
     raw.skinDomains.length > 0 ? raw.skinDomains : [new URL(raw.publicUrl).hostname];
   return { ...raw, skinDomains };
