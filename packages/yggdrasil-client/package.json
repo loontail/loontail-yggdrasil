@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/loontail/yggdrasil.git",
+    "url": "git+https://github.com/loontail/loontail-yggdrasil.git",
     "directory": "packages/yggdrasil-client"
   },
   "type": "module",
