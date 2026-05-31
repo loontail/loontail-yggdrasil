@@ -53,7 +53,7 @@
     "kind": "plugin"
   },
   "dependencies": {
-    "@loontail/minecraft-kit": "^0.8.10",
+    "@loontail/minecraft-kit": "^0.8.14",
     "@loontail/yggdrasil-core": "^0.0.7",
     "skinview3d": "^3.1.1"
   },
