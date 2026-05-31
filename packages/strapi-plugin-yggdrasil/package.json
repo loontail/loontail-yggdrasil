@@ -1,6 +1,6 @@
 {
   "name": "@loontail/strapi-plugin-yggdrasil",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Strapi v5 plugin for Loontail Minecraft Auth: Yggdrasil-compatible authentication, session and bulk-profile endpoints plus player skin/cape storage, upload, deletion and an admin UI under /admin/plugins/yggdrasil.",
   "license": "MIT",
   "author": {
