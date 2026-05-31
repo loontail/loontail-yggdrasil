@@ -1,6 +1,6 @@
 {
   "name": "@loontail/yggdrasil-core",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Shared types, Zod schemas, UUID helpers, PNG byte-level validation and texturesPayload codec used by Loontail Minecraft Auth on both server (Strapi plugin) and client (launcher).",
   "license": "MIT",
   "author": {
